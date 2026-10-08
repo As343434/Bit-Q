@@ -1,0 +1,6 @@
+{
+  "name": "Bit'Q (e=')",
+  "description": "Good food, closer to you. Discover, order, and enjoy artisanal local dining through a soft glass-layer experience supporting customers, restaurant partners, and delivery partners.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

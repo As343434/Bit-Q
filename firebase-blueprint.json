@@ -1,0 +1,433 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile for Customer, Restaurant Partner, or Delivery Partner.",
+      "type": "object",
+      "properties": {
+        "google_uid": {
+          "type": "string",
+          "description": "Unique Google Authentication UID",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Full display name",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified Google account email address",
+          "minLength": 3,
+          "maxLength": 150
+        },
+        "profile_image": {
+          "type": "string",
+          "description": "Profile photo URL from Google",
+          "maxLength": 500
+        },
+        "location": {
+          "type": "string",
+          "description": "Selected city or delivery area",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "role": {
+          "type": "string",
+          "enum": ["customer", "restaurant_partner", "delivery_partner"],
+          "description": "Assigned role in the Bit'Q platform"
+        },
+        "delivery_preferences": {
+          "type": "string",
+          "description": "Optional customer delivery notes or instructions",
+          "maxLength": 200
+        },
+        "dietary_preferences": {
+          "type": "string",
+          "description": "Optional customer dietary preferences",
+          "maxLength": 100
+        },
+        "is_online": {
+          "type": "boolean",
+          "description": "Online/Offline availability status for Delivery Partners"
+        },
+        "delivery_range_km": {
+          "type": "number",
+          "description": "Configured delivery range in kilometers for Delivery Partners"
+        },
+        "restaurant_id": {
+          "type": "string",
+          "description": "Associated restaurant document ID for Restaurant Partners",
+          "maxLength": 128
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Account creation server timestamp"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last profile update server timestamp"
+        }
+      },
+      "required": ["google_uid", "name", "email", "profile_image", "location", "role", "created_at", "updated_at"]
+    },
+    "Restaurant": {
+      "title": "Restaurant",
+      "description": "Restaurant storefront managed by a Restaurant Partner or seeded catalog.",
+      "type": "object",
+      "properties": {
+        "owner_uid": {
+          "type": "string",
+          "description": "UID of the Restaurant Partner owner",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Restaurant brand name",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "owner_name": {
+          "type": "string",
+          "description": "Name of the restaurant proprietor",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "contact_phone": {
+          "type": "string",
+          "description": "Business contact number",
+          "minLength": 5,
+          "maxLength": 30
+        },
+        "location": {
+          "type": "string",
+          "description": "Neighborhood and city address",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "cuisine": {
+          "type": "string",
+          "description": "Primary cuisine specialty",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "operating_hours": {
+          "type": "string",
+          "description": "Daily operating hours schedule",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "rating": {
+          "type": "number",
+          "description": "Average guest rating (1.0 to 5.0)"
+        },
+        "delivery_time": {
+          "type": "string",
+          "description": "Estimated delivery window (e.g., 25-30 min)",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "distance": {
+          "type": "string",
+          "description": "Approximate distance (e.g., 2.4 km)",
+          "minLength": 1,
+          "maxLength": 30
+        },
+        "price_indicator": {
+          "type": "string",
+          "description": "Price tier indicator (e.g., $$, $$$)",
+          "minLength": 1,
+          "maxLength": 10
+        },
+        "offer_text": {
+          "type": "string",
+          "description": "Featured promotional offer text",
+          "maxLength": 100
+        },
+        "image_url": {
+          "type": "string",
+          "description": "Hero photograph URL or local asset path",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "is_open": {
+          "type": "boolean",
+          "description": "Whether the restaurant is currently accepting orders"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation server timestamp"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update server timestamp"
+        }
+      },
+      "required": ["owner_uid", "name", "owner_name", "contact_phone", "location", "cuisine", "operating_hours", "rating", "delivery_time", "distance", "price_indicator", "offer_text", "image_url", "is_open", "created_at", "updated_at"]
+    },
+    "MenuItem": {
+      "title": "MenuItem",
+      "description": "Individual culinary dish belonging to a Restaurant.",
+      "type": "object",
+      "properties": {
+        "restaurant_id": {
+          "type": "string",
+          "description": "Parent restaurant document ID",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "owner_uid": {
+          "type": "string",
+          "description": "UID of the Restaurant Partner who owns this item",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Dish title",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "description": "Short culinary description and key ingredients",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "price": {
+          "type": "number",
+          "description": "Unit price in USD"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["Starters", "Main Course", "Beverages", "Desserts"],
+          "description": "Menu section category"
+        },
+        "image_url": {
+          "type": "string",
+          "description": "Dish photograph URL or asset path",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "is_available": {
+          "type": "boolean",
+          "description": "In-stock availability toggle"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation server timestamp"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Update server timestamp"
+        }
+      },
+      "required": ["restaurant_id", "owner_uid", "name", "description", "price", "category", "image_url", "is_available", "created_at", "updated_at"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer food delivery order with live status timeline.",
+      "type": "object",
+      "properties": {
+        "customer_uid": {
+          "type": "string",
+          "description": "UID of ordering customer",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "customer_name": {
+          "type": "string",
+          "description": "Customer display name",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "delivery_address": {
+          "type": "string",
+          "description": "Customer delivery destination",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "restaurant_id": {
+          "type": "string",
+          "description": "ID of restaurant preparing the order",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "restaurant_owner_uid": {
+          "type": "string",
+          "description": "UID of the restaurant partner",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "restaurant_name": {
+          "type": "string",
+          "description": "Restaurant name",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "restaurant_location": {
+          "type": "string",
+          "description": "Restaurant pickup address",
+          "minLength": 1,
+          "maxLength": 150
+        },
+        "delivery_partner_uid": {
+          "type": "string",
+          "description": "UID of assigned delivery partner (or empty string if unassigned)",
+          "maxLength": 128
+        },
+        "delivery_partner_name": {
+          "type": "string",
+          "description": "Name of assigned delivery partner",
+          "maxLength": 100
+        },
+        "items_summary": {
+          "type": "string",
+          "description": "Formatted summary of ordered items and quantities",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "item_count": {
+          "type": "number",
+          "description": "Total quantity of items in order"
+        },
+        "subtotal": {
+          "type": "number",
+          "description": "Items subtotal amount"
+        },
+        "delivery_fee": {
+          "type": "number",
+          "description": "Delivery fee amount"
+        },
+        "discount": {
+          "type": "number",
+          "description": "Applied promotional discount amount"
+        },
+        "taxes": {
+          "type": "number",
+          "description": "Calculated taxes amount"
+        },
+        "total": {
+          "type": "number",
+          "description": "Final order total amount"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["ORDER_PLACED", "RESTAURANT_ACCEPTED", "FOOD_PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"],
+          "description": "Live order workflow state"
+        },
+        "estimated_arrival": {
+          "type": "string",
+          "description": "Estimated arrival time window",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "distance_km": {
+          "type": "number",
+          "description": "Trip distance in kilometers"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Order placement server timestamp"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Order status update server timestamp"
+        }
+      },
+      "required": ["customer_uid", "customer_name", "delivery_address", "restaurant_id", "restaurant_owner_uid", "restaurant_name", "restaurant_location", "delivery_partner_uid", "delivery_partner_name", "items_summary", "item_count", "subtotal", "delivery_fee", "discount", "taxes", "total", "status", "estimated_arrival", "distance_km", "created_at", "updated_at"]
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "Customer help desk ticket for order or platform assistance.",
+      "type": "object",
+      "properties": {
+        "user_uid": {
+          "type": "string",
+          "description": "UID of the customer submitting the ticket",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["Order issue", "Missing item", "Late delivery", "Refund/payment issue", "Restaurant issue", "Delivery partner issue", "General support"],
+          "description": "Support topic category"
+        },
+        "order_id": {
+          "type": "string",
+          "description": "Optional associated order ID",
+          "maxLength": 128
+        },
+        "subject": {
+          "type": "string",
+          "description": "Brief summary of the issue",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "message": {
+          "type": "string",
+          "description": "Detailed description from the customer",
+          "minLength": 1,
+          "maxLength": 800
+        },
+        "status": {
+          "type": "string",
+          "enum": ["OPEN", "IN_PROGRESS", "RESOLVED"],
+          "description": "Ticket resolution status"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Ticket creation server timestamp"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Ticket update server timestamp"
+        }
+      },
+      "required": ["user_uid", "category", "order_id", "subject", "message", "status", "created_at", "updated_at"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles isolated by owner UID"
+    },
+    "/restaurants/{restaurantId}": {
+      "schema": { "$ref": "#/entities/Restaurant" },
+      "description": "Publicly discoverable restaurant storefronts managed by restaurant partners"
+    },
+    "/menu_items/{itemId}": {
+      "schema": { "$ref": "#/entities/MenuItem" },
+      "description": "Publicly discoverable menu items managed by restaurant partners"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Orders accessible to the ordering customer, restaurant partner, or delivery partner"
+    },
+    "/support_tickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/SupportTicket" },
+      "description": "Customer help desk support tickets"
+    }
+  }
+}
