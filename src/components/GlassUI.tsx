@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   MapPin,
   Search,
@@ -14,6 +14,8 @@ import {
   Compass,
   Receipt,
   User as UserIcon,
+  Tag,
+  Crosshair,
 } from 'lucide-react';
 import {
   Restaurant,
@@ -21,10 +23,11 @@ import {
   Order,
   OrderStatus,
   UserProfile,
+  GeoLocationData,
 } from '../types';
-import { POPULAR_LOCATIONS } from '../seedData';
+import { POPULAR_LOCATIONS_DATA } from '../seedData';
 
-/* 1. ResilientImage (Zero-Broken-Image Policy) */
+/* 1. ResilientImage (Zero-Broken-Image Policy + Reset on src change) */
 export const ResilientImage: React.FC<{
   src: string;
   alt: string;
@@ -32,14 +35,18 @@ export const ResilientImage: React.FC<{
 }> = ({ src, alt, className = '' }) => {
   const [hasError, setHasError] = useState(false);
 
-  if (hasError || !src) {
+  useEffect(() => {
+    setHasError(false);
+  }, [src]);
+
+  if (hasError || !src || !src.trim()) {
     return (
       <div
         className={`flex flex-col items-center justify-center bg-gradient-to-br from-stone-200 via-stone-100 to-emerald-50/60 text-stone-500 p-4 text-center ${className}`}
       >
         <Utensils className="w-6 h-6 mb-1.5 text-emerald-800/70" />
         <span className="text-xs font-medium text-stone-600 line-clamp-1">
-          {alt}
+          {alt || 'Dish Preview'}
         </span>
       </div>
     );
@@ -110,7 +117,7 @@ export const GlassButton: React.FC<{
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`min-h-[44px] px-5 py-2.5 rounded-2xl font-medium text-sm inline-flex items-center justify-center gap-2 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800 disabled:opacity-50 disabled:pointer-events-none ${
+      className={`min-h-[48px] px-5 py-2.5 rounded-2xl font-semibold text-sm inline-flex items-center justify-center gap-2 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800 disabled:opacity-50 disabled:pointer-events-none ${
         variantStyles[variant]
       } ${fullWidth ? 'w-full' : ''} ${className}`}
     >
@@ -162,16 +169,14 @@ export const GlassInput: React.FC<{
           maxLength={maxLength}
           onChange={(e) => onChange && onChange(e.target.value)}
           placeholder={placeholder}
-          className={`w-full min-h-[46px] px-4 py-2.5 rounded-2xl text-sm transition-colors duration-150 focus:outline-none ${
+          className={`w-full min-h-[48px] px-4 py-2.5 rounded-2xl text-sm transition-colors duration-150 focus:outline-none ${
             readOnly
               ? 'bg-stone-200/50 text-stone-600 border border-stone-200/70 cursor-not-allowed'
               : 'bg-white/85 text-stone-900 border border-stone-200/90 focus:border-emerald-800 focus:bg-white'
           }`}
         />
       </div>
-      {helperText && (
-        <p className="text-xs text-stone-500">{helperText}</p>
-      )}
+      {helperText && <p className="text-xs text-stone-500">{helperText}</p>}
     </div>
   );
 };
@@ -235,18 +240,109 @@ export const GlassBottomSheet: React.FC<{
   );
 };
 
-/* 7. LocationSelector */
+/* 7. LocationSelector with Live Nominatim Geocoding Autocomplete + Coordinates */
 export const LocationSelector: React.FC<{
   currentLocation: string;
-  onSelectLocation: (loc: string) => void;
+  onSelectLocation: (loc: string, geo?: GeoLocationData) => void;
   compact?: boolean;
 }> = ({ currentLocation, onSelectLocation, compact = false }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [liveSuggestions, setLiveSuggestions] = useState<GeoLocationData[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
-  const filteredLocations = POPULAR_LOCATIONS.filter((loc) =>
-    loc.toLowerCase().includes(searchQuery.toLowerCase())
+  // Live address autocomplete using OpenStreetMap Nominatim
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 3) {
+      setLiveSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+            q
+          )}&limit=5`
+        );
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          const mapped: GeoLocationData[] = data.map(
+            (item: {
+              display_name: string;
+              lat: string;
+              lon: string;
+              place_id?: number | string;
+            }) => ({
+              formattedAddress: item.display_name
+                .split(',')
+                .slice(0, 3)
+                .join(',')
+                .trim(),
+              lat: parseFloat(item.lat),
+              lng: parseFloat(item.lon),
+              placeId: String(item.place_id || ''),
+            })
+          );
+          setLiveSuggestions(mapped);
+        }
+      } catch {
+        setLiveSuggestions([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 320);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const filteredPopular = POPULAR_LOCATIONS_DATA.filter((loc) =>
+    loc.formattedAddress.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const combinedSuggestions =
+    liveSuggestions.length > 0 ? liveSuggestions : filteredPopular;
+
+  const handleUseCurrentGps = () => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+          );
+          const data = await res.json();
+          const addr = data?.display_name
+            ? data.display_name.split(',').slice(0, 3).join(',').trim()
+            : `GPS (${latitude.toFixed(3)}, ${longitude.toFixed(3)})`;
+          onSelectLocation(addr, {
+            formattedAddress: addr,
+            lat: latitude,
+            lng: longitude,
+            placeId: String(data?.place_id || 'gps-current'),
+          });
+          setIsOpen(false);
+        } catch {
+          const addr = `Current Location (${latitude.toFixed(
+            3
+          )}, ${longitude.toFixed(3)})`;
+          onSelectLocation(addr, {
+            formattedAddress: addr,
+            lat: latitude,
+            lng: longitude,
+            placeId: 'gps-current',
+          });
+          setIsOpen(false);
+        }
+      },
+      () => {
+        // Fallback if permission denied
+      }
+    );
+  };
 
   return (
     <>
@@ -264,10 +360,10 @@ export const LocationSelector: React.FC<{
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-medium text-stone-500 leading-tight">
-            Delivering to
+            Where should we deliver?
           </p>
           <p className="text-sm font-semibold text-stone-900 truncate">
-            {currentLocation || 'Select your location'}
+            {currentLocation || 'Search your location'}
           </p>
         </div>
         <ChevronRight className="w-4 h-4 text-stone-400 group-hover:text-stone-700 shrink-0 transition-transform group-hover:translate-x-0.5" />
@@ -276,7 +372,7 @@ export const LocationSelector: React.FC<{
       <GlassBottomSheet
         isOpen={isOpen}
         onClose={() => setIsOpen(false)}
-        title="Select your delivery area"
+        title="Where should we deliver?"
       >
         <div className="space-y-4">
           <div className="relative">
@@ -285,44 +381,41 @@ export const LocationSelector: React.FC<{
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search city, neighborhood, or street..."
-              className="w-full min-h-[46px] pl-11 pr-4 py-2.5 rounded-2xl bg-white border border-stone-200 text-sm focus:outline-none focus:border-emerald-800"
+              placeholder="Search your location (e.g., Sector 49, Indiranagar)..."
+              className="w-full min-h-[48px] pl-11 pr-4 py-2.5 rounded-2xl bg-white border border-stone-200 text-sm focus:outline-none focus:border-emerald-800"
             />
           </div>
 
-          {searchQuery.trim().length > 2 &&
-            !filteredLocations.some(
-              (l) => l.toLowerCase() === searchQuery.trim().toLowerCase()
-            ) && (
-              <button
-                type="button"
-                onClick={() => {
-                  onSelectLocation(searchQuery.trim());
-                  setIsOpen(false);
-                }}
-                className="w-full min-h-[48px] px-4 py-3 rounded-2xl bg-emerald-900/5 hover:bg-emerald-900/10 text-left flex items-center justify-between transition-colors"
-              >
-                <span className="text-sm font-medium text-emerald-950">
-                  Use "{searchQuery.trim()}"
-                </span>
-                <span className="text-xs font-medium text-emerald-800">
-                  Set custom area
-                </span>
-              </button>
-            )}
+          <button
+            type="button"
+            onClick={handleUseCurrentGps}
+            className="w-full min-h-[46px] px-4 py-2.5 rounded-2xl bg-emerald-900/5 hover:bg-emerald-900/10 text-emerald-950 text-xs font-semibold flex items-center justify-between transition-colors"
+          >
+            <span className="inline-flex items-center gap-2">
+              <Crosshair className="w-4 h-4 text-emerald-800" />
+              <span>Use current GPS coordinates</span>
+            </span>
+            <span className="text-emerald-800">Auto-detect</span>
+          </button>
+
+          {isSearching && (
+            <p className="text-xs text-stone-500 px-2">
+              Searching live address coordinates...
+            </p>
+          )}
 
           <div className="divide-y divide-stone-200/60">
-            {filteredLocations.map((loc) => {
-              const isSelected = loc === currentLocation;
+            {combinedSuggestions.map((loc, idx) => {
+              const isSelected = loc.formattedAddress === currentLocation;
               return (
                 <button
-                  key={loc}
+                  key={`${loc.formattedAddress}-${idx}`}
                   type="button"
                   onClick={() => {
-                    onSelectLocation(loc);
+                    onSelectLocation(loc.formattedAddress, loc);
                     setIsOpen(false);
                   }}
-                  className="w-full min-h-[52px] py-3 px-2 flex items-center justify-between text-left hover:bg-stone-100/70 rounded-xl transition-colors"
+                  className="w-full min-h-[54px] py-3 px-2 flex items-center justify-between text-left hover:bg-stone-100/70 rounded-xl transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <MapPin
@@ -330,15 +423,20 @@ export const LocationSelector: React.FC<{
                         isSelected ? 'text-emerald-800' : 'text-stone-400'
                       }`}
                     />
-                    <span
-                      className={`text-sm truncate ${
-                        isSelected
-                          ? 'font-semibold text-emerald-950'
-                          : 'text-stone-700'
-                      }`}
-                    >
-                      {loc}
-                    </span>
+                    <div className="min-w-0">
+                      <p
+                        className={`text-sm truncate ${
+                          isSelected
+                            ? 'font-semibold text-emerald-950'
+                            : 'text-stone-800'
+                        }`}
+                      >
+                        {loc.formattedAddress}
+                      </p>
+                      <p className="text-[11px] font-mono text-stone-400 tabular-nums">
+                        {loc.lat.toFixed(4)}° N, {loc.lng.toFixed(4)}° E
+                      </p>
+                    </div>
                   </div>
                   {isSelected && (
                     <Check className="w-4 h-4 text-emerald-800 shrink-0" />
@@ -358,11 +456,7 @@ export const SearchBar: React.FC<{
   value: string;
   onChange: (val: string) => void;
   placeholder?: string;
-}> = ({
-  value,
-  onChange,
-  placeholder = 'What are you craving today?',
-}) => {
+}> = ({ value, onChange, placeholder = 'What are you craving today?' }) => {
   return (
     <div className="relative w-full">
       <Search className="w-4 h-4 text-stone-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -387,7 +481,7 @@ export const SearchBar: React.FC<{
   );
 };
 
-/* 9. CategoryCard (Interactive Filter Control) */
+/* 9. CategoryCard */
 export const CategoryCard: React.FC<{
   label: string;
   subtitle?: string;
@@ -418,7 +512,7 @@ export const CategoryCard: React.FC<{
   );
 };
 
-/* 10. OfferCard */
+/* 10. OfferCard (Coupon Card) */
 export const OfferCard: React.FC<{
   code: string;
   title: string;
@@ -426,32 +520,34 @@ export const OfferCard: React.FC<{
   activeCode?: string;
   onApply: (code: string) => void;
 }> = ({ code, title, subtitle, activeCode, onApply }) => {
-  const isApplied = activeCode === code;
+  const isApplied = activeCode?.toUpperCase() === code.toUpperCase();
   return (
     <div className="glass-surface rounded-3xl p-5 min-w-[280px] md:min-w-[320px] flex flex-col justify-between gap-4">
       <div>
         <div className="flex items-center justify-between gap-2 text-xs text-stone-500 mb-1.5">
-          <span className="font-mono font-medium text-emerald-900">{code}</span>
+          <span className="font-mono font-semibold text-emerald-900">
+            Code: {code}
+          </span>
           <span aria-hidden="true">·</span>
-          <span>Partner Privilege</span>
+          <span>Verified Offer</span>
         </div>
         <h4 className="text-base font-semibold text-stone-900 font-display leading-snug">
           {title}
         </h4>
         <p className="text-xs text-stone-600 mt-1 leading-relaxed">{subtitle}</p>
       </div>
-      <div className="flex items-center justify-between pt-2 border-t border-stone-200/50">
-        <span className="text-xs text-stone-500">Auto-applied at checkout</span>
+      <div className="flex items-center justify-between pt-3 border-t border-stone-200/50">
+        <span className="text-xs font-mono text-stone-500">{code}</span>
         <button
           type="button"
           onClick={() => onApply(isApplied ? '' : code)}
-          className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+          className={`min-h-[38px] px-4 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
             isApplied
               ? 'bg-emerald-900 text-white'
-              : 'bg-stone-900/5 text-stone-900 hover:bg-stone-900/10'
+              : 'bg-stone-900 text-white hover:bg-stone-800'
           }`}
         >
-          {isApplied ? 'Applied ✓' : 'Use Offer'}
+          {isApplied ? 'APPLIED ✓' : 'APPLY'}
         </button>
       </div>
     </div>
@@ -466,7 +562,9 @@ export const RestaurantCard: React.FC<{
   return (
     <article
       onClick={onClick}
-      className="glass-surface rounded-3xl overflow-hidden cursor-pointer group transition-transform duration-150 hover:-translate-y-0.5 flex flex-col"
+      className={`glass-surface rounded-3xl overflow-hidden cursor-pointer group transition-transform duration-150 hover:-translate-y-0.5 flex flex-col ${
+        !restaurant.is_open ? 'opacity-65' : ''
+      }`}
     >
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-stone-100">
         <ResilientImage
@@ -476,7 +574,9 @@ export const RestaurantCard: React.FC<{
         />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent p-4 pt-10 flex items-end justify-between text-white">
           <span className="text-xs font-medium tracking-wide">
-            {restaurant.offer_text}
+            {restaurant.is_open
+              ? restaurant.offer_text
+              : '🔴 Kitchen Currently Closed'}
           </span>
           <span className="text-xs font-mono tabular-nums">
             {restaurant.delivery_time}
@@ -495,11 +595,12 @@ export const RestaurantCard: React.FC<{
               {restaurant.rating.toFixed(1)}
             </span>
           </div>
-          {/* Zero-Pill Unboxed Metadata with middot separators */}
           <div className="flex items-center gap-1.5 text-xs text-stone-500 mt-1 truncate">
             <span className="truncate">{restaurant.cuisine}</span>
             <span aria-hidden="true">·</span>
-            <span className="tabular-nums shrink-0">{restaurant.price_indicator}</span>
+            <span className="tabular-nums shrink-0">
+              {restaurant.price_indicator}
+            </span>
           </div>
         </div>
 
@@ -564,7 +665,9 @@ export const FoodCard: React.FC<{
           {!item.is_available && (
             <>
               <span aria-hidden="true">·</span>
-              <span className="text-rose-700 font-medium">Currently Sold Out</span>
+              <span className="text-rose-700 font-medium">
+                Currently Sold Out
+              </span>
             </>
           )}
         </div>
@@ -572,7 +675,7 @@ export const FoodCard: React.FC<{
           {item.name}
         </h4>
         <p className="text-sm font-mono font-medium text-stone-900 mt-1 tabular-nums">
-          ${item.price.toFixed(2)}
+          ₹{item.price.toFixed(0)}
         </p>
         <p className="text-xs text-stone-600 mt-1.5 line-clamp-2 leading-relaxed">
           {item.description}
@@ -613,35 +716,43 @@ export const FoodCard: React.FC<{
   );
 };
 
-/* 14. StatusTimeline */
-const ORDER_STEPS: { status: OrderStatus; label: string; detail: string }[] = [
+/* 14. StatusTimeline (Supports full Customer + Courier Lifecycle) */
+const ORDER_STEPS: {
+  statuses: OrderStatus[];
+  label: string;
+  detail: string;
+}[] = [
   {
-    status: 'ORDER_PLACED',
+    statuses: ['ORDER_PLACED'],
     label: 'Order Placed',
-    detail: 'Received by kitchen console',
+    detail: 'Received by restaurant kitchen',
   },
   {
-    status: 'RESTAURANT_ACCEPTED',
-    label: 'Restaurant Accepted',
+    statuses: ['RESTAURANT_ACCEPTED'],
+    label: 'Order Accepted',
     detail: 'Chef confirmed your table ticket',
   },
   {
-    status: 'FOOD_PREPARING',
-    label: 'Food Preparing',
-    detail: 'Crafted fresh on the hearth',
-  },
-  {
-    status: 'READY_FOR_PICKUP',
-    label: 'Ready for Pickup',
+    statuses: ['FOOD_PREPARING', 'READY_FOR_PICKUP'],
+    label: 'Food Prepared',
     detail: 'Packed in insulated glass-layer pouch',
   },
   {
-    status: 'OUT_FOR_DELIVERY',
-    label: 'Out for Delivery',
-    detail: 'Courier en route to your door',
+    statuses: [
+      'COURIER_ACCEPTED',
+      'GOING_TO_RESTAURANT',
+      'ARRIVED_AT_RESTAURANT',
+    ],
+    label: 'Courier Assigned & At Pickup',
+    detail: 'Delivery partner collecting your order',
   },
   {
-    status: 'DELIVERED',
+    statuses: ['OUT_FOR_DELIVERY', 'ARRIVED_AT_CUSTOMER'],
+    label: 'On the Way',
+    detail: 'Courier en route to your destination',
+  },
+  {
+    statuses: ['DELIVERED'],
     label: 'Delivered',
     detail: 'Enjoy your meal',
   },
@@ -658,7 +769,10 @@ export const StatusTimeline: React.FC<{ currentStatus: OrderStatus }> = ({
     );
   }
 
-  const currentIndex = ORDER_STEPS.findIndex((s) => s.status === currentStatus);
+  const currentIndex = Math.max(
+    0,
+    ORDER_STEPS.findIndex((s) => s.statuses.includes(currentStatus))
+  );
 
   return (
     <div className="space-y-3">
@@ -666,7 +780,7 @@ export const StatusTimeline: React.FC<{ currentStatus: OrderStatus }> = ({
         const isCompleted = index <= currentIndex;
         const isCurrent = index === currentIndex;
         return (
-          <div key={step.status} className="flex items-start gap-3.5">
+          <div key={step.label} className="flex items-start gap-3.5">
             <div className="flex flex-col items-center">
               <div
                 className={`w-6 h-6 rounded-full flex items-center justify-center text-xs transition-colors ${
@@ -732,7 +846,7 @@ export const OrderCard: React.FC<{
           </p>
         </div>
         <span className="text-base font-mono font-semibold text-stone-900 tabular-nums">
-          ${order.total.toFixed(2)}
+          ₹{order.total.toFixed(0)}
         </span>
       </div>
 
@@ -747,7 +861,10 @@ export const OrderCard: React.FC<{
           {order.delivery_partner_name && (
             <>
               <span aria-hidden="true">·</span>
-              <span>Courier: {order.delivery_partner_name}</span>
+              <span>
+                Courier: {order.delivery_partner_name} (
+                {(order.delivery_partner_rating || 4.8).toFixed(1)} ★)
+              </span>
             </>
           )}
         </div>
@@ -767,31 +884,39 @@ export const OrderCard: React.FC<{
   );
 };
 
-/* 16. StatusToggle (Online/Offline for Delivery Partner or Restaurant Open/Closed) */
+/* 16. StatusToggle (Distinct Kitchen OPEN/CLOSED vs Courier ONLINE/OFFLINE) */
 export const StatusToggle: React.FC<{
   isOnline: boolean;
   onToggle: (next: boolean) => void;
   onlineLabel?: string;
   offlineLabel?: string;
+  mode?: 'courier' | 'kitchen';
 }> = ({
   isOnline,
   onToggle,
-  onlineLabel = 'ONLINE · Receiving Requests',
-  offlineLabel = 'OFFLINE · Paused',
+  onlineLabel = '● ONLINE',
+  offlineLabel = '● OFFLINE',
+  mode = 'courier',
 }) => {
   return (
     <button
       type="button"
       onClick={() => onToggle(!isOnline)}
-      className={`min-h-[48px] px-4 py-2.5 rounded-2xl flex items-center gap-3 transition-all duration-150 ${
+      className={`min-h-[44px] px-4 py-2 rounded-2xl flex items-center gap-2.5 transition-all duration-150 ${
         isOnline
           ? 'bg-emerald-900 text-white shadow-md shadow-emerald-950/15'
+          : mode === 'kitchen'
+          ? 'bg-rose-900 text-white'
           : 'glass-surface text-stone-700'
       }`}
     >
       <span
         className={`w-2.5 h-2.5 rounded-full ${
-          isOnline ? 'bg-emerald-300 animate-pulse' : 'bg-stone-400'
+          isOnline
+            ? 'bg-emerald-300 animate-pulse'
+            : mode === 'kitchen'
+            ? 'bg-rose-300'
+            : 'bg-stone-400'
         }`}
       />
       <span className="text-xs font-semibold tracking-wide whitespace-nowrap">
@@ -847,10 +972,10 @@ export const ProfileCard: React.FC<{
   );
 };
 
-/* 18. NavigationBar (Follows 3-Zone Top Bar Contract on Desktop & <15% Sticky Cap on Mobile) */
+/* 18. NavigationBar (Strict 3-Zone Top Bar Contract) */
 export type CustomerTab =
   | 'home'
-  | 'search'
+  | 'offers'
   | 'orders'
   | 'cart'
   | 'profile'
@@ -861,16 +986,12 @@ export const NavigationBar: React.FC<{
   onSelectTab: (tab: CustomerTab) => void;
   cartCount: number;
   currentLocation: string;
-  onSelectLocation: (loc: string) => void;
-}> = ({
-  activeTab,
-  onSelectTab,
-  cartCount,
-}) => {
+  onSelectLocation: (loc: string, geo?: GeoLocationData) => void;
+}> = ({ activeTab, onSelectTab, cartCount }) => {
   const navItems: { id: CustomerTab; label: string; icon: React.ReactNode }[] =
     [
       { id: 'home', label: 'Discover', icon: <Compass className="w-5 h-5" /> },
-      { id: 'search', label: 'Search', icon: <Search className="w-5 h-5" /> },
+      { id: 'offers', label: 'Offers', icon: <Tag className="w-5 h-5" /> },
       { id: 'orders', label: 'Orders', icon: <Receipt className="w-5 h-5" /> },
       {
         id: 'cart',
@@ -882,7 +1003,6 @@ export const NavigationBar: React.FC<{
 
   return (
     <>
-      {/* Desktop Top Navigation — Strict 3-Zone Contract */}
       <header className="sticky top-0 z-30 glass-surface border-b border-stone-200/60 px-6 py-3.5">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           {/* Zone 1: Single Text Element Brand Wordmark */}
@@ -909,14 +1029,14 @@ export const NavigationBar: React.FC<{
             </button>
             <button
               type="button"
-              onClick={() => onSelectTab('search')}
+              onClick={() => onSelectTab('offers')}
               className={`py-1 transition-colors whitespace-nowrap ${
-                activeTab === 'search'
+                activeTab === 'offers'
                   ? 'text-stone-900 font-semibold underline underline-offset-8 decoration-emerald-800 decoration-2'
                   : 'hover:text-stone-900'
               }`}
             >
-              Search
+              Offers
             </button>
             <button
               type="button"

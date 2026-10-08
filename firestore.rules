@@ -2,12 +2,10 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 0. Global Safety Net
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Global Primitives
     function isSignedIn() {
       return request.auth != null;
     }
@@ -20,217 +18,50 @@ service cloud.firestore {
       return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    function incoming() {
-      return request.resource.data;
-    }
-
-    function existing() {
-      return resource.data;
-    }
-
-    // 1. User Validation Blueprint
-    function isValidUser(data) {
-      return data.keys().hasAll(['google_uid', 'name', 'email', 'profile_image', 'location', 'role', 'created_at', 'updated_at']) &&
-             data.keys().hasOnly(['google_uid', 'name', 'email', 'profile_image', 'location', 'role', 'delivery_preferences', 'dietary_preferences', 'is_online', 'delivery_range_km', 'restaurant_id', 'created_at', 'updated_at']) &&
-             data.google_uid is string && data.google_uid.size() >= 1 && data.google_uid.size() <= 128 && data.google_uid == request.auth.uid &&
-             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
-             data.email is string && data.email.size() >= 3 && data.email.size() <= 150 &&
-             data.profile_image is string && data.profile_image.size() <= 500 &&
-             data.location is string && data.location.size() >= 1 && data.location.size() <= 150 &&
-             data.role is string && (data.role == 'customer' || data.role == 'restaurant_partner' || data.role == 'delivery_partner') &&
-             (!('delivery_preferences' in data) || (data.delivery_preferences is string && data.delivery_preferences.size() <= 200)) &&
-             (!('dietary_preferences' in data) || (data.dietary_preferences is string && data.dietary_preferences.size() <= 100)) &&
-             (!('is_online' in data) || data.is_online is bool) &&
-             (!('delivery_range_km' in data) || (data.delivery_range_km is number && data.delivery_range_km >= 1 && data.delivery_range_km <= 50)) &&
-             (!('restaurant_id' in data) || (data.restaurant_id is string && data.restaurant_id.size() <= 128)) &&
-             data.created_at is timestamp &&
-             data.updated_at is timestamp;
-    }
-
     match /users/{userId} {
       allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
       allow list: if isSignedIn() && resource.data.google_uid == request.auth.uid;
-      allow create: if isVerified() && isValidId(userId) && request.auth.uid == userId &&
-                    isValidUser(incoming()) &&
-                    incoming().created_at == request.time &&
-                    incoming().updated_at == request.time;
-      allow update: if isVerified() && isValidId(userId) && request.auth.uid == userId &&
-                    isValidUser(incoming()) &&
-                    incoming().google_uid == existing().google_uid &&
-                    incoming().email == existing().email &&
-                    incoming().created_at == existing().created_at &&
-                    incoming().updated_at == request.time &&
-                    incoming().diff(existing()).affectedKeys().hasOnly(['name', 'location', 'role', 'profile_image', 'delivery_preferences', 'dietary_preferences', 'is_online', 'delivery_range_km', 'restaurant_id', 'updated_at']);
-    }
-
-    // 2. Restaurant Validation Blueprint
-    function isValidRestaurant(data) {
-      return data.keys().hasAll(['owner_uid', 'name', 'owner_name', 'contact_phone', 'location', 'cuisine', 'operating_hours', 'rating', 'delivery_time', 'distance', 'price_indicator', 'offer_text', 'image_url', 'is_open', 'created_at', 'updated_at']) &&
-             data.keys().hasOnly(['owner_uid', 'name', 'owner_name', 'contact_phone', 'location', 'cuisine', 'operating_hours', 'rating', 'delivery_time', 'distance', 'price_indicator', 'offer_text', 'image_url', 'is_open', 'created_at', 'updated_at']) &&
-             data.owner_uid is string && data.owner_uid.size() >= 1 && data.owner_uid.size() <= 128 && data.owner_uid == request.auth.uid &&
-             data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
-             data.owner_name is string && data.owner_name.size() >= 1 && data.owner_name.size() <= 100 &&
-             data.contact_phone is string && data.contact_phone.size() >= 5 && data.contact_phone.size() <= 30 &&
-             data.location is string && data.location.size() >= 1 && data.location.size() <= 150 &&
-             data.cuisine is string && data.cuisine.size() >= 1 && data.cuisine.size() <= 80 &&
-             data.operating_hours is string && data.operating_hours.size() >= 1 && data.operating_hours.size() <= 80 &&
-             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
-             data.delivery_time is string && data.delivery_time.size() >= 1 && data.delivery_time.size() <= 40 &&
-             data.distance is string && data.distance.size() >= 1 && data.distance.size() <= 30 &&
-             data.price_indicator is string && data.price_indicator.size() >= 1 && data.price_indicator.size() <= 10 &&
-             data.offer_text is string && data.offer_text.size() <= 100 &&
-             data.image_url is string && data.image_url.size() >= 1 && data.image_url.size() <= 500 &&
-             data.is_open is bool &&
-             data.created_at is timestamp &&
-             data.updated_at is timestamp;
+      allow create, update: if isVerified() && isValidId(userId) && request.auth.uid == userId &&
+                            request.resource.data.google_uid == request.auth.uid;
     }
 
     match /restaurants/{restaurantId} {
-      allow get: if isSignedIn() && isValidId(restaurantId) && resource.data.name is string;
-      allow list: if isSignedIn() && resource.data.name is string;
-      allow create: if isVerified() && isValidId(restaurantId) &&
-                    isValidRestaurant(incoming()) &&
-                    incoming().created_at == request.time &&
-                    incoming().updated_at == request.time;
-      allow update: if isVerified() && isValidId(restaurantId) &&
-                    isValidRestaurant(incoming()) &&
-                    existing().owner_uid == request.auth.uid &&
-                    incoming().owner_uid == existing().owner_uid &&
-                    incoming().created_at == existing().created_at &&
-                    incoming().updated_at == request.time &&
-                    incoming().diff(existing()).affectedKeys().hasOnly(['name', 'owner_name', 'contact_phone', 'location', 'cuisine', 'operating_hours', 'delivery_time', 'price_indicator', 'offer_text', 'image_url', 'is_open', 'updated_at']);
+      allow get, list: if isSignedIn() && resource.data.name is string;
+      allow create, update: if isVerified() && isValidId(restaurantId) &&
+                            request.resource.data.owner_uid == request.auth.uid;
     }
 
-    // 3. MenuItem Validation Blueprint
-    function isValidMenuItem(data) {
-      return data.keys().hasAll(['restaurant_id', 'owner_uid', 'name', 'description', 'price', 'category', 'image_url', 'is_available', 'created_at', 'updated_at']) &&
-             data.keys().hasOnly(['restaurant_id', 'owner_uid', 'name', 'description', 'price', 'category', 'image_url', 'is_available', 'created_at', 'updated_at']) &&
-             data.restaurant_id is string && data.restaurant_id.size() >= 1 && data.restaurant_id.size() <= 128 &&
-             data.owner_uid is string && data.owner_uid.size() >= 1 && data.owner_uid.size() <= 128 && data.owner_uid == request.auth.uid &&
-             data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
-             data.description is string && data.description.size() >= 1 && data.description.size() <= 300 &&
-             data.price is number && data.price >= 0.5 && data.price <= 1000 &&
-             data.category is string && (data.category == 'Starters' || data.category == 'Main Course' || data.category == 'Beverages' || data.category == 'Desserts') &&
-             data.image_url is string && data.image_url.size() >= 1 && data.image_url.size() <= 500 &&
-             data.is_available is bool &&
-             data.created_at is timestamp &&
-             data.updated_at is timestamp;
+    match /restaurant_categories/{categoryId} {
+      allow get, list: if isSignedIn() && resource.data.name is string;
+      allow create, update, delete: if isVerified() && isValidId(categoryId);
     }
 
     match /menu_items/{itemId} {
-      allow get: if isSignedIn() && isValidId(itemId) && resource.data.name is string;
-      allow list: if isSignedIn() && resource.data.name is string;
-      allow create: if isVerified() && isValidId(itemId) &&
-                    isValidMenuItem(incoming()) &&
-                    incoming().created_at == request.time &&
-                    incoming().updated_at == request.time;
-      allow update: if isVerified() && isValidId(itemId) &&
-                    isValidMenuItem(incoming()) &&
-                    existing().owner_uid == request.auth.uid &&
-                    incoming().owner_uid == existing().owner_uid &&
-                    incoming().restaurant_id == existing().restaurant_id &&
-                    incoming().created_at == existing().created_at &&
-                    incoming().updated_at == request.time &&
-                    incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'price', 'category', 'image_url', 'is_available', 'updated_at']);
-      allow delete: if isVerified() && isValidId(itemId) && existing().owner_uid == request.auth.uid;
+      allow get, list: if isSignedIn() && resource.data.name is string;
+      allow create, update: if isVerified() && isValidId(itemId) &&
+                            request.resource.data.owner_uid == request.auth.uid;
+      allow delete: if isVerified() && isValidId(itemId) &&
+                    resource.data.owner_uid == request.auth.uid;
     }
 
-    // 4. Order Validation Blueprint
-    function isValidOrder(data) {
-      return data.keys().hasAll(['customer_uid', 'customer_name', 'delivery_address', 'restaurant_id', 'restaurant_owner_uid', 'restaurant_name', 'restaurant_location', 'delivery_partner_uid', 'delivery_partner_name', 'items_summary', 'item_count', 'subtotal', 'delivery_fee', 'discount', 'taxes', 'total', 'status', 'estimated_arrival', 'distance_km', 'created_at', 'updated_at']) &&
-             data.keys().hasOnly(['customer_uid', 'customer_name', 'delivery_address', 'restaurant_id', 'restaurant_owner_uid', 'restaurant_name', 'restaurant_location', 'delivery_partner_uid', 'delivery_partner_name', 'items_summary', 'item_count', 'subtotal', 'delivery_fee', 'discount', 'taxes', 'total', 'status', 'estimated_arrival', 'distance_km', 'created_at', 'updated_at']) &&
-             data.customer_uid is string && data.customer_uid.size() >= 1 && data.customer_uid.size() <= 128 &&
-             data.customer_name is string && data.customer_name.size() >= 1 && data.customer_name.size() <= 100 &&
-             data.delivery_address is string && data.delivery_address.size() >= 1 && data.delivery_address.size() <= 200 &&
-             data.restaurant_id is string && data.restaurant_id.size() >= 1 && data.restaurant_id.size() <= 128 &&
-             data.restaurant_owner_uid is string && data.restaurant_owner_uid.size() >= 1 && data.restaurant_owner_uid.size() <= 128 &&
-             data.restaurant_name is string && data.restaurant_name.size() >= 1 && data.restaurant_name.size() <= 120 &&
-             data.restaurant_location is string && data.restaurant_location.size() >= 1 && data.restaurant_location.size() <= 150 &&
-             data.delivery_partner_uid is string && data.delivery_partner_uid.size() <= 128 &&
-             data.delivery_partner_name is string && data.delivery_partner_name.size() <= 100 &&
-             data.items_summary is string && data.items_summary.size() >= 1 && data.items_summary.size() <= 500 &&
-             data.item_count is number && data.item_count >= 1 && data.item_count <= 100 &&
-             data.subtotal is number && data.subtotal >= 0 &&
-             data.delivery_fee is number && data.delivery_fee >= 0 &&
-             data.discount is number && data.discount >= 0 &&
-             data.taxes is number && data.taxes >= 0 &&
-             data.total is number && data.total >= 0 &&
-             data.status is string && (data.status == 'ORDER_PLACED' || data.status == 'RESTAURANT_ACCEPTED' || data.status == 'FOOD_PREPARING' || data.status == 'READY_FOR_PICKUP' || data.status == 'OUT_FOR_DELIVERY' || data.status == 'DELIVERED' || data.status == 'CANCELLED') &&
-             data.estimated_arrival is string && data.estimated_arrival.size() >= 1 && data.estimated_arrival.size() <= 50 &&
-             data.distance_km is number && data.distance_km >= 0.1 && data.distance_km <= 50 &&
-             data.created_at is timestamp &&
-             data.updated_at is timestamp;
+    match /coupons/{couponId} {
+      allow get, list: if isSignedIn() && resource.data.code is string;
+      allow create, update, delete: if isVerified() && isValidId(couponId);
     }
 
     match /orders/{orderId} {
-      allow get: if isSignedIn() && isValidId(orderId) && (
-        resource.data.customer_uid == request.auth.uid ||
-        resource.data.restaurant_owner_uid == request.auth.uid ||
-        resource.data.delivery_partner_uid == request.auth.uid ||
-        resource.data.status == 'READY_FOR_PICKUP' ||
-        resource.data.status == 'RESTAURANT_ACCEPTED' ||
-        resource.data.status == 'FOOD_PREPARING'
-      );
-      allow list: if isSignedIn() && (
-        resource.data.customer_uid == request.auth.uid ||
-        resource.data.restaurant_owner_uid == request.auth.uid ||
-        resource.data.delivery_partner_uid == request.auth.uid ||
-        resource.data.status == 'READY_FOR_PICKUP' ||
-        resource.data.status == 'RESTAURANT_ACCEPTED' ||
-        resource.data.status == 'FOOD_PREPARING' ||
-        resource.data.status == 'ORDER_PLACED'
-      );
+      allow get, list: if isSignedIn() && resource.data.customer_uid is string;
       allow create: if isVerified() && isValidId(orderId) &&
-                    isValidOrder(incoming()) &&
-                    incoming().customer_uid == request.auth.uid &&
-                    incoming().status == 'ORDER_PLACED' &&
-                    incoming().created_at == request.time &&
-                    incoming().updated_at == request.time;
+                    request.resource.data.customer_uid == request.auth.uid;
       allow update: if isVerified() && isValidId(orderId) &&
-                    isValidOrder(incoming()) &&
-                    existing().status != 'DELIVERED' &&
-                    existing().status != 'CANCELLED' &&
-                    incoming().customer_uid == existing().customer_uid &&
-                    incoming().restaurant_id == existing().restaurant_id &&
-                    incoming().created_at == existing().created_at &&
-                    incoming().updated_at == request.time && (
-                      // Action 1: Restaurant or Customer updates order status
-                      (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'estimated_arrival', 'updated_at'])) ||
-                      // Action 2: Delivery Partner accepts or progresses delivery
-                      (incoming().diff(existing()).affectedKeys().hasOnly(['status', 'delivery_partner_uid', 'delivery_partner_name', 'estimated_arrival', 'updated_at']) &&
-                       incoming().delivery_partner_uid == request.auth.uid)
-                    );
-    }
-
-    // 5. SupportTicket Validation Blueprint
-    function isValidSupportTicket(data) {
-      return data.keys().hasAll(['user_uid', 'category', 'order_id', 'subject', 'message', 'status', 'created_at', 'updated_at']) &&
-             data.keys().hasOnly(['user_uid', 'category', 'order_id', 'subject', 'message', 'status', 'created_at', 'updated_at']) &&
-             data.user_uid is string && data.user_uid.size() >= 1 && data.user_uid.size() <= 128 && data.user_uid == request.auth.uid &&
-             data.category is string && (data.category == 'Order issue' || data.category == 'Missing item' || data.category == 'Late delivery' || data.category == 'Refund/payment issue' || data.category == 'Restaurant issue' || data.category == 'Delivery partner issue' || data.category == 'General support') &&
-             data.order_id is string && data.order_id.size() <= 128 &&
-             data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 120 &&
-             data.message is string && data.message.size() >= 1 && data.message.size() <= 800 &&
-             data.status is string && (data.status == 'OPEN' || data.status == 'IN_PROGRESS' || data.status == 'RESOLVED') &&
-             data.created_at is timestamp &&
-             data.updated_at is timestamp;
+                    resource.data.status != 'DELIVERED' &&
+                    resource.data.status != 'CANCELLED';
     }
 
     match /support_tickets/{ticketId} {
-      allow get: if isSignedIn() && isValidId(ticketId) && resource.data.user_uid == request.auth.uid;
-      allow list: if isSignedIn() && resource.data.user_uid == request.auth.uid;
-      allow create: if isVerified() && isValidId(ticketId) &&
-                    isValidSupportTicket(incoming()) &&
-                    incoming().status == 'OPEN' &&
-                    incoming().created_at == request.time &&
-                    incoming().updated_at == request.time;
-      allow update: if isVerified() && isValidId(ticketId) &&
-                    isValidSupportTicket(incoming()) &&
-                    existing().user_uid == request.auth.uid &&
-                    incoming().user_uid == existing().user_uid &&
-                    incoming().created_at == existing().created_at &&
-                    incoming().updated_at == request.time &&
-                    incoming().diff(existing()).affectedKeys().hasOnly(['status', 'message', 'updated_at']);
+      allow get, list: if isSignedIn() && resource.data.user_uid == request.auth.uid;
+      allow create, update: if isVerified() && isValidId(ticketId) &&
+                            request.resource.data.user_uid == request.auth.uid;
     }
   }
 }

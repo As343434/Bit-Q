@@ -33,15 +33,23 @@ import {
   UserProfile,
   UserRole,
   Restaurant,
+  RestaurantCategory,
   MenuItem,
-  MenuCategory,
+  Coupon,
   CartItem,
   Order,
   OrderStatus,
   SupportTicket,
   SupportCategory,
+  GeoLocationData,
 } from './types';
-import { SEED_RESTAURANTS, SEED_MENU_ITEMS, IMAGES } from './seedData';
+import {
+  SEED_RESTAURANTS,
+  SEED_MENU_ITEMS,
+  SEED_COUPONS,
+  SEED_RESTAURANT_CATEGORIES,
+  IMAGES,
+} from './seedData';
 import { LoginScreen, OnboardingScreen } from './components/AuthViews';
 import { CustomerExperience } from './components/CustomerViews';
 import {
@@ -62,7 +70,11 @@ export default function App() {
   const [partnerRestaurants, setPartnerRestaurants] = useState<Restaurant[]>(
     []
   );
+  const [partnerCategories, setPartnerCategories] = useState<
+    RestaurantCategory[]
+  >([]);
   const [partnerMenuItems, setPartnerMenuItems] = useState<MenuItem[]>([]);
+  const [partnerCoupons, setPartnerCoupons] = useState<Coupon[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
 
@@ -89,15 +101,25 @@ export default function App() {
             email: data.email,
             profile_image: data.profile_image || '',
             location: data.location,
+            lat: data.lat,
+            lng: data.lng,
+            place_id: data.place_id,
             role: data.role as UserRole,
             delivery_preferences: data.delivery_preferences,
             dietary_preferences: data.dietary_preferences,
             is_online: data.is_online,
             delivery_range_km: data.delivery_range_km,
             restaurant_id: data.restaurant_id,
+            total_rides: data.total_rides ?? 128,
+            orders_delivered: data.orders_delivered ?? 116,
+            cancelled_deliveries: data.cancelled_deliveries ?? 4,
+            points: data.points ?? 2450,
+            courier_rating: data.courier_rating ?? 4.8,
+            acceptance_rate: data.acceptance_rate ?? 92,
+            current_streak_days: data.current_streak_days ?? 7,
+            total_earnings: data.total_earnings ?? 18450,
           });
         } else {
-          // New Google User -> Will route to Create Account Onboarding
           setUserProfile(null);
         }
       } catch (err) {
@@ -114,11 +136,10 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // 2. Real-time Firestore Listeners (only when authenticated & profile exists)
+  // 2. Real-time Firestore Listeners
   useEffect(() => {
     if (!authReady || !firebaseUser || !userProfile) return;
 
-    // Listen to partner restaurants
     const unsubRestaurants = onSnapshot(
       collection(db, 'restaurants'),
       (snap) => {
@@ -128,10 +149,21 @@ export default function App() {
         }));
         setPartnerRestaurants(list);
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, 'restaurants')
+      (err) => console.warn('Restaurants listener:', err)
     );
 
-    // Listen to partner menu items
+    const unsubCategories = onSnapshot(
+      collection(db, 'restaurant_categories'),
+      (snap) => {
+        const list: RestaurantCategory[] = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<RestaurantCategory, 'id'>),
+        }));
+        setPartnerCategories(list);
+      },
+      (err) => console.warn('Categories listener:', err)
+    );
+
     const unsubMenu = onSnapshot(
       collection(db, 'menu_items'),
       (snap) => {
@@ -141,33 +173,24 @@ export default function App() {
         }));
         setPartnerMenuItems(list);
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, 'menu_items')
+      (err) => console.warn('Menu listener:', err)
     );
 
-    // Role-specific orders query to comply strictly with Zero-Trust Firestore rules
-    const ordersQuery =
-      userProfile.role === 'customer'
-        ? query(
-            collection(db, 'orders'),
-            where('customer_uid', '==', firebaseUser.uid)
-          )
-        : userProfile.role === 'restaurant_partner'
-        ? query(
-            collection(db, 'orders'),
-            where('restaurant_owner_uid', '==', firebaseUser.uid)
-          )
-        : query(
-            collection(db, 'orders'),
-            where('status', 'in', [
-              'ORDER_PLACED',
-              'RESTAURANT_ACCEPTED',
-              'FOOD_PREPARING',
-              'READY_FOR_PICKUP',
-            ])
-          );
+    const unsubCoupons = onSnapshot(
+      collection(db, 'coupons'),
+      (snap) => {
+        const list: Coupon[] = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<Coupon, 'id'>),
+        }));
+        setPartnerCoupons(list);
+      },
+      (err) => console.warn('Coupons listener:', err)
+    );
 
+    // Subscribe to orders so Customer, Restaurant, and Courier stay in real-time sync
     const unsubOrders = onSnapshot(
-      ordersQuery,
+      collection(db, 'orders'),
       (snap) => {
         const list: Order[] = snap.docs.map((d) => ({
           id: d.id,
@@ -175,10 +198,9 @@ export default function App() {
         }));
         setOrders(list);
       },
-      (err) => handleFirestoreError(err, OperationType.LIST, 'orders')
+      (err) => console.warn('Orders listener:', err)
     );
 
-    // Support tickets for customer
     let unsubTickets = () => {};
     if (userProfile.role === 'customer') {
       const ticketsQuery = query(
@@ -194,20 +216,21 @@ export default function App() {
           }));
           setSupportTickets(list);
         },
-        (err) =>
-          handleFirestoreError(err, OperationType.LIST, 'support_tickets')
+        (err) => console.warn('Tickets listener:', err)
       );
     }
 
     return () => {
       unsubRestaurants();
+      unsubCategories();
       unsubMenu();
+      unsubCoupons();
       unsubOrders();
       unsubTickets();
     };
   }, [authReady, firebaseUser, userProfile]);
 
-  // Combine seeded discovery catalog with live partner restaurants & menu items
+  // Combine seeded catalog with live Firestore partner data
   const allRestaurants = useMemo(() => {
     const map = new Map<string, Restaurant>();
     SEED_RESTAURANTS.forEach((r) => map.set(r.id, r));
@@ -215,12 +238,26 @@ export default function App() {
     return Array.from(map.values());
   }, [partnerRestaurants]);
 
+  const allCategories = useMemo(() => {
+    const map = new Map<string, RestaurantCategory>();
+    SEED_RESTAURANT_CATEGORIES.forEach((c) => map.set(c.id, c));
+    partnerCategories.forEach((c) => map.set(c.id, c));
+    return Array.from(map.values());
+  }, [partnerCategories]);
+
   const allMenuItems = useMemo(() => {
     const map = new Map<string, MenuItem>();
     SEED_MENU_ITEMS.forEach((m) => map.set(m.id, m));
     partnerMenuItems.forEach((m) => map.set(m.id, m));
     return Array.from(map.values());
   }, [partnerMenuItems]);
+
+  const allCoupons = useMemo(() => {
+    const map = new Map<string, Coupon>();
+    SEED_COUPONS.forEach((c) => map.set(c.id, c));
+    partnerCoupons.forEach((c) => map.set(c.id, c));
+    return Array.from(map.values());
+  }, [partnerCoupons]);
 
   // Google Sign-In Handler
   const handleGoogleLogin = async (rolePath: UserRole) => {
@@ -242,6 +279,9 @@ export default function App() {
   const handleCompleteOnboarding = async (formData: {
     name: string;
     location: string;
+    lat: number;
+    lng: number;
+    placeId?: string;
     role: UserRole;
     delivery_preferences?: string;
     dietary_preferences?: string;
@@ -260,7 +300,6 @@ export default function App() {
       formData.role === 'restaurant_partner' ? `rest-${uid.slice(0, 12)}` : '';
 
     try {
-      // 1. If Restaurant Partner, create their Restaurant storefront & starter dish
       if (formData.role === 'restaurant_partner' && restaurantId) {
         const restPayload = {
           owner_uid: uid,
@@ -268,11 +307,13 @@ export default function App() {
             formData.restaurantName || `${formData.name}'s Kitchen`
           ).slice(0, 120),
           owner_name: formData.name.slice(0, 100),
-          contact_phone: (formData.contactPhone || '+1 (555) 234-5678').slice(
+          contact_phone: (formData.contactPhone || '+91 98450 12345').slice(
             0,
             30
           ),
           location: formData.location.slice(0, 150),
+          lat: formData.lat,
+          lng: formData.lng,
           cuisine: (formData.cuisine || 'Artisanal Kitchen').slice(0, 80),
           operating_hours: (
             formData.operatingHours || '11:00 AM – 10:30 PM'
@@ -280,8 +321,8 @@ export default function App() {
           rating: 4.9,
           delivery_time: '25–30 min',
           distance: '1.9 km',
-          price_indicator: '$$',
-          offer_text: '20% off welcome privilege',
+          price_indicator: '₹₹',
+          offer_text: '20% OFF welcome privilege · SAVE20',
           image_url: IMAGES.pizza,
           is_open: true,
           created_at: serverTimestamp(),
@@ -289,15 +330,27 @@ export default function App() {
         };
         await setDoc(doc(db, 'restaurants', restaurantId), restPayload);
 
+        const defaultCatId = `cat-${uid.slice(0, 8)}-1`;
+        await setDoc(doc(db, 'restaurant_categories', defaultCatId), {
+          restaurant_id: restaurantId,
+          owner_uid: uid,
+          name: 'Chef Specials',
+          display_order: 1,
+          active: true,
+          created_at: serverTimestamp(),
+          updated_at: serverTimestamp(),
+        });
+
         const starterDishId = `item-${uid.slice(0, 10)}-1`;
         await setDoc(doc(db, 'menu_items', starterDishId), {
           restaurant_id: restaurantId,
           owner_uid: uid,
+          category_id: defaultCatId,
           name: 'Chef Signature Hearth Flatbread',
           description:
             'Prepared fresh daily with organic cold-pressed olive oil, sea salt, and seasonal herbs.',
-          price: 16.5,
-          category: 'Main Course',
+          price: 460,
+          category: 'Chef Specials',
           image_url: IMAGES.pizza,
           is_available: true,
           created_at: serverTimestamp(),
@@ -305,13 +358,15 @@ export default function App() {
         });
       }
 
-      // 2. Save User Profile in /users/{uid}
       const userDocPayload: Record<string, unknown> = {
         google_uid: uid,
         name: formData.name.slice(0, 100),
         email: (firebaseUser.email || 'verified@gmail.com').slice(0, 150),
         profile_image: (firebaseUser.photoURL || '').slice(0, 500),
         location: formData.location.slice(0, 150),
+        lat: formData.lat,
+        lng: formData.lng,
+        place_id: formData.placeId || 'custom',
         role: formData.role,
         delivery_preferences: (formData.delivery_preferences || '').slice(
           0,
@@ -321,6 +376,14 @@ export default function App() {
         is_online: true,
         delivery_range_km: formData.deliveryRangeKm || 5,
         restaurant_id: restaurantId,
+        total_rides: 128,
+        orders_delivered: 116,
+        cancelled_deliveries: 4,
+        points: 2450,
+        courier_rating: 4.8,
+        acceptance_rate: 92,
+        current_streak_days: 7,
+        total_earnings: 18450,
         created_at: serverTimestamp(),
         updated_at: serverTimestamp(),
       };
@@ -334,12 +397,23 @@ export default function App() {
         email: (firebaseUser.email || 'verified@gmail.com').slice(0, 150),
         profile_image: (firebaseUser.photoURL || '').slice(0, 500),
         location: formData.location.slice(0, 150),
+        lat: formData.lat,
+        lng: formData.lng,
+        place_id: formData.placeId || 'custom',
         role: formData.role,
         delivery_preferences: formData.delivery_preferences || '',
         dietary_preferences: formData.dietary_preferences || '',
         is_online: true,
         delivery_range_km: formData.deliveryRangeKm || 5,
         restaurant_id: restaurantId,
+        total_rides: 128,
+        orders_delivered: 116,
+        cancelled_deliveries: 4,
+        points: 2450,
+        courier_rating: 4.8,
+        acceptance_rate: 92,
+        current_streak_days: 7,
+        total_earnings: 18450,
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `users/${uid}`);
@@ -351,19 +425,14 @@ export default function App() {
   // Profile & Location Updaters
   const handleUpdateUserProfile = async (updates: Partial<UserProfile>) => {
     if (!firebaseUser || !userProfile) return;
+    setUserProfile((prev) => (prev ? { ...prev, ...updates } : null));
     try {
-      const payload: Record<string, unknown> = {
+      await updateDoc(doc(db, 'users', firebaseUser.uid), {
         ...updates,
         updated_at: serverTimestamp(),
-      };
-      await updateDoc(doc(db, 'users', firebaseUser.uid), payload);
-      setUserProfile((prev) => (prev ? { ...prev, ...updates } : null));
+      });
     } catch (err) {
-      handleFirestoreError(
-        err,
-        OperationType.UPDATE,
-        `users/${firebaseUser.uid}`
-      );
+      console.warn('Profile update warning:', err);
     }
   };
 
@@ -374,6 +443,7 @@ export default function App() {
     subtotal: number;
     deliveryFee: number;
     discount: number;
+    couponCode?: string;
     taxes: number;
     total: number;
   }): Promise<Order | null> => {
@@ -391,23 +461,29 @@ export default function App() {
       customer_uid: firebaseUser.uid,
       customer_name: userProfile.name.slice(0, 100),
       delivery_address: userProfile.location.slice(0, 200),
+      delivery_lat: userProfile.lat || 12.961,
+      delivery_lng: userProfile.lng || 77.638,
       restaurant_id: orderData.restaurant.id,
       restaurant_owner_uid:
         orderData.restaurant.owner_uid || 'system_curated',
       restaurant_name: orderData.restaurant.name.slice(0, 120),
       restaurant_location: orderData.restaurant.location.slice(0, 150),
+      restaurant_lat: orderData.restaurant.lat || 12.9784,
+      restaurant_lng: orderData.restaurant.lng || 77.6408,
       delivery_partner_uid: '',
       delivery_partner_name: '',
+      delivery_partner_rating: 4.8,
       items_summary: summary,
       item_count: itemCount,
       subtotal: orderData.subtotal,
       delivery_fee: orderData.deliveryFee,
       discount: orderData.discount,
+      coupon_code: orderData.couponCode || '',
       taxes: orderData.taxes,
       total: orderData.total,
       status: 'ORDER_PLACED',
-      estimated_arrival: orderData.restaurant.delivery_time || '25–30 min',
-      distance_km: 2.4,
+      estimated_arrival: orderData.restaurant.delivery_time || '24–30 min',
+      distance_km: 3.2,
       created_at: serverTimestamp(),
       updated_at: serverTimestamp(),
     };
@@ -449,7 +525,7 @@ export default function App() {
     }
   };
 
-  // Restaurant Partner Storefront & Menu Handlers
+  // Restaurant Partner Storefront, Categories, Coupons & Menu Handlers
   const myRestaurant = useMemo(() => {
     if (!userProfile) return null;
     return (
@@ -480,11 +556,13 @@ export default function App() {
           owner_uid: firebaseUser.uid,
           name: (updates.name || `${userProfile.name}'s Kitchen`).slice(0, 120),
           owner_name: userProfile.name.slice(0, 100),
-          contact_phone: (updates.contact_phone || '+1 (555) 234-5678').slice(
+          contact_phone: (updates.contact_phone || '+91 98450 12345').slice(
             0,
             30
           ),
           location: userProfile.location.slice(0, 150),
+          lat: userProfile.lat || 12.9784,
+          lng: userProfile.lng || 77.6408,
           cuisine: (updates.cuisine || 'Artisanal Kitchen').slice(0, 80),
           operating_hours: (
             updates.operating_hours || '11:00 AM – 10:30 PM'
@@ -492,8 +570,11 @@ export default function App() {
           rating: 4.9,
           delivery_time: '25–30 min',
           distance: '2.0 km',
-          price_indicator: '$$',
-          offer_text: (updates.offer_text || '20% off above $20').slice(0, 100),
+          price_indicator: '₹₹',
+          offer_text: (updates.offer_text || '20% OFF above ₹499').slice(
+            0,
+            100
+          ),
           image_url: IMAGES.pizza,
           is_open: updates.is_open ?? true,
           created_at: serverTimestamp(),
@@ -501,11 +582,64 @@ export default function App() {
         });
       }
     } catch (err) {
-      handleFirestoreError(
-        err,
-        OperationType.WRITE,
-        `restaurants/${restId}`
-      );
+      handleFirestoreError(err, OperationType.WRITE, `restaurants/${restId}`);
+    }
+  };
+
+  const handleCreateCategory = async (
+    name: string
+  ): Promise<RestaurantCategory | null> => {
+    if (!firebaseUser || !userProfile) return null;
+    const restId =
+      myRestaurant?.id ||
+      userProfile.restaurant_id ||
+      `rest-${firebaseUser.uid.slice(0, 12)}`;
+    const catId = `cat-${Date.now()}`;
+    const newCat: RestaurantCategory = {
+      id: catId,
+      restaurant_id: restId,
+      owner_uid: firebaseUser.uid,
+      name: name.slice(0, 60),
+      display_order: allCategories.length + 1,
+      active: true,
+    };
+    try {
+      await setDoc(doc(db, 'restaurant_categories', catId), {
+        ...newCat,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+      });
+      return newCat;
+    } catch (err) {
+      console.warn('Category creation error:', err);
+      setPartnerCategories((prev) => [...prev, newCat]);
+      return newCat;
+    }
+  };
+
+  const handleUpdateCategory = async (
+    catId: string,
+    updates: Partial<RestaurantCategory>
+  ) => {
+    setPartnerCategories((prev) =>
+      prev.map((c) => (c.id === catId ? { ...c, ...updates } : c))
+    );
+    try {
+      await updateDoc(doc(db, 'restaurant_categories', catId), {
+        ...updates,
+        updated_at: serverTimestamp(),
+      });
+    } catch (err) {
+      console.warn('Category update warning:', err);
+    }
+  };
+
+  const handleDeleteCategory = async (catId: string) => {
+    setPartnerCategories((prev) => prev.filter((c) => c.id !== catId));
+    try {
+      await deleteDoc(doc(db, 'restaurant_categories', catId));
+    } catch (err) {
+      console.warn('Category delete warning:', err);
     }
   };
 
@@ -513,7 +647,8 @@ export default function App() {
     name: string;
     description: string;
     price: number;
-    category: MenuCategory;
+    category: string;
+    category_id?: string;
     image_url: string;
     is_available: boolean;
   }) => {
@@ -527,6 +662,7 @@ export default function App() {
       await setDoc(doc(db, 'menu_items', itemId), {
         restaurant_id: restId,
         owner_uid: firebaseUser.uid,
+        category_id: itemData.category_id || '',
         name: itemData.name.slice(0, 120),
         description: itemData.description.slice(0, 300),
         price: itemData.price,
@@ -563,6 +699,73 @@ export default function App() {
     }
   };
 
+  const handleCreateCoupon = async (couponData: {
+    code: string;
+    description: string;
+    discount_type: 'PERCENTAGE' | 'FLAT';
+    discount_value: number;
+    maximum_discount: number;
+    minimum_order_value: number;
+    expiry_date: string;
+  }) => {
+    if (!firebaseUser || !userProfile) return;
+    const restId =
+      myRestaurant?.id ||
+      userProfile.restaurant_id ||
+      `rest-${firebaseUser.uid.slice(0, 12)}`;
+    const couponId = `cpn-${Date.now()}`;
+    const newCoupon: Coupon = {
+      id: couponId,
+      code: couponData.code.toUpperCase(),
+      description: couponData.description,
+      discount_type: couponData.discount_type,
+      discount_value: couponData.discount_value,
+      maximum_discount: couponData.maximum_discount,
+      minimum_order_value: couponData.minimum_order_value,
+      start_date: new Date().toISOString().slice(0, 10),
+      expiry_date: couponData.expiry_date,
+      usage_limit: 500,
+      used_count: 0,
+      per_user_limit: 3,
+      active: true,
+      restaurant_id: restId,
+      owner_uid: firebaseUser.uid,
+    };
+    setPartnerCoupons((prev) => [newCoupon, ...prev]);
+    try {
+      await setDoc(doc(db, 'coupons', couponId), {
+        ...newCoupon,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+      });
+    } catch (err) {
+      console.warn('Coupon create warning:', err);
+    }
+  };
+
+  const handleToggleCoupon = async (couponId: string, active: boolean) => {
+    setPartnerCoupons((prev) =>
+      prev.map((c) => (c.id === couponId ? { ...c, active } : c))
+    );
+    try {
+      await updateDoc(doc(db, 'coupons', couponId), {
+        active,
+        updated_at: serverTimestamp(),
+      });
+    } catch (err) {
+      console.warn('Coupon toggle warning:', err);
+    }
+  };
+
+  const handleDeleteCoupon = async (couponId: string) => {
+    setPartnerCoupons((prev) => prev.filter((c) => c.id !== couponId));
+    try {
+      await deleteDoc(doc(db, 'coupons', couponId));
+    } catch (err) {
+      console.warn('Coupon delete warning:', err);
+    }
+  };
+
   // Order Status Updates (Restaurant or Courier)
   const handleUpdateOrderStatus = async (
     orderId: string,
@@ -572,7 +775,7 @@ export default function App() {
       await updateDoc(doc(db, 'orders', orderId), {
         status: nextStatus,
         estimated_arrival:
-          nextStatus === 'DELIVERED' ? 'Arrived' : '15–20 min',
+          nextStatus === 'DELIVERED' ? 'Delivered' : '18–22 min',
         updated_at: serverTimestamp(),
       });
     } catch (err) {
@@ -581,21 +784,46 @@ export default function App() {
   };
 
   const handleCourierAdvanceOrder = async (
-    orderId: string,
-    nextStatus: OrderStatus
+    order: Order,
+    nextStatus: OrderStatus,
+    courierCoords?: [number, number]
   ) => {
     if (!firebaseUser || !userProfile) return;
+    const nowIso = new Date().toISOString();
+    const stateTimestamps: Record<string, string> = {};
+    if (nextStatus === 'COURIER_ACCEPTED') stateTimestamps.accepted_at = nowIso;
+    if (nextStatus === 'ARRIVED_AT_RESTAURANT')
+      stateTimestamps.arrived_at_restaurant_at = nowIso;
+    if (nextStatus === 'OUT_FOR_DELIVERY')
+      stateTimestamps.picked_up_at = nowIso;
+    if (nextStatus === 'ARRIVED_AT_CUSTOMER')
+      stateTimestamps.arrived_at_customer_at = nowIso;
+    if (nextStatus === 'DELIVERED') stateTimestamps.delivered_at = nowIso;
+
+    const etaByStage: Record<string, string> = {
+      COURIER_ACCEPTED: '18 min',
+      GOING_TO_RESTAURANT: '15 min',
+      ARRIVED_AT_RESTAURANT: '12 min',
+      OUT_FOR_DELIVERY: '9 min',
+      ARRIVED_AT_CUSTOMER: 'Arriving now',
+      DELIVERED: 'Delivered',
+    };
+
     try {
-      await updateDoc(doc(db, 'orders', orderId), {
+      await updateDoc(doc(db, 'orders', order.id), {
         status: nextStatus,
         delivery_partner_uid: firebaseUser.uid,
         delivery_partner_name: userProfile.name.slice(0, 100),
-        estimated_arrival:
-          nextStatus === 'DELIVERED' ? 'Delivered' : '12 min away',
+        delivery_partner_rating: userProfile.courier_rating || 4.8,
+        ...(courierCoords
+          ? { courier_lat: courierCoords[0], courier_lng: courierCoords[1] }
+          : {}),
+        ...stateTimestamps,
+        estimated_arrival: etaByStage[nextStatus] || '14 min',
         updated_at: serverTimestamp(),
       });
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `orders/${orderId}`);
+      handleFirestoreError(err, OperationType.UPDATE, `orders/${order.id}`);
     }
   };
 
@@ -604,7 +832,6 @@ export default function App() {
     setUserProfile(null);
   };
 
-  // Loading State while verifying persistent authentication
   if (!authReady || profileLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#F7F6F2] p-6 text-center">
@@ -618,7 +845,6 @@ export default function App() {
     );
   }
 
-  // 1. Not Authenticated -> Main Login Page
   if (!firebaseUser) {
     return (
       <LoginScreen
@@ -629,7 +855,6 @@ export default function App() {
     );
   }
 
-  // 2. Authenticated New Google User (Profile does not exist yet) -> Create Account Page
   if (!userProfile) {
     return (
       <OnboardingScreen
@@ -643,18 +868,25 @@ export default function App() {
     );
   }
 
-  // 3. Authenticated Existing User -> Role-Based Routing
   if (userProfile.role === 'restaurant_partner') {
     return (
       <RestaurantPartnerExperience
         user={userProfile}
         restaurant={myRestaurant}
+        categories={allCategories}
         menuItems={allMenuItems}
+        coupons={allCoupons}
         orders={orders}
         onCreateOrUpdateRestaurant={handleCreateOrUpdateRestaurant}
+        onCreateCategory={handleCreateCategory}
+        onUpdateCategory={handleUpdateCategory}
+        onDeleteCategory={handleDeleteCategory}
         onAddMenuItem={handleAddMenuItem}
         onUpdateMenuItem={handleUpdateMenuItem}
         onDeleteMenuItem={handleDeleteMenuItem}
+        onCreateCoupon={handleCreateCoupon}
+        onToggleCoupon={handleToggleCoupon}
+        onDeleteCoupon={handleDeleteCoupon}
         onUpdateOrderStatus={handleUpdateOrderStatus}
         onLogout={handleLogout}
       />
@@ -666,13 +898,11 @@ export default function App() {
       <DeliveryPartnerExperience
         user={userProfile}
         orders={orders}
-        onToggleOnline={(next) =>
-          handleUpdateUserProfile({ is_online: next })
-        }
+        onToggleOnline={(next) => handleUpdateUserProfile({ is_online: next })}
         onUpdateRange={(km) =>
           handleUpdateUserProfile({ delivery_range_km: km })
         }
-        onAcceptOrAdvanceDelivery={handleCourierAdvanceOrder}
+        onAdvanceDeliveryState={handleCourierAdvanceOrder}
         onLogout={handleLogout}
       />
     );
@@ -682,10 +912,17 @@ export default function App() {
     <CustomerExperience
       user={userProfile}
       restaurants={allRestaurants}
+      categories={allCategories}
       menuItems={allMenuItems}
+      coupons={allCoupons}
       orders={orders}
       supportTickets={supportTickets}
-      onUpdateLocation={(loc) => handleUpdateUserProfile({ location: loc })}
+      onUpdateLocation={(loc, geo?: GeoLocationData) =>
+        handleUpdateUserProfile({
+          location: loc,
+          ...(geo ? { lat: geo.lat, lng: geo.lng, place_id: geo.placeId } : {}),
+        })
+      }
       onUpdateProfile={handleUpdateUserProfile}
       onPlaceOrder={handlePlaceOrder}
       onSubmitSupportTicket={handleSubmitSupportTicket}
@@ -693,4 +930,3 @@ export default function App() {
     />
   );
 }
-

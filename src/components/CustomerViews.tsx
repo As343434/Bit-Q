@@ -3,26 +3,28 @@ import {
   ArrowLeft,
   Star,
   Clock,
-  MapPin,
   ShoppingBag,
   Trash2,
-  Navigation,
   LifeBuoy,
   CheckCircle2,
   Compass,
-  Sparkles,
+  Tag,
+  AlertCircle,
+  Check,
 } from 'lucide-react';
 import {
   UserProfile,
   Restaurant,
+  RestaurantCategory,
   MenuItem,
   CartItem,
   Order,
+  Coupon,
   SupportTicket,
   SupportCategory,
-  MenuCategory,
+  GeoLocationData,
 } from '../types';
-import { FOOD_CATEGORIES, CURATED_DEALS } from '../seedData';
+import { FOOD_CATEGORIES } from '../seedData';
 import {
   GlassCard,
   GlassButton,
@@ -41,14 +43,17 @@ import {
   CustomerTab,
   ResilientImage,
 } from './GlassUI';
+import { InteractiveRouteMap } from './InteractiveMap';
 
 export const CustomerExperience: React.FC<{
   user: UserProfile;
   restaurants: Restaurant[];
+  categories: RestaurantCategory[];
   menuItems: MenuItem[];
+  coupons: Coupon[];
   orders: Order[];
   supportTickets: SupportTicket[];
-  onUpdateLocation: (loc: string) => Promise<void>;
+  onUpdateLocation: (loc: string, geo?: GeoLocationData) => Promise<void>;
   onUpdateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   onPlaceOrder: (orderPayload: {
     restaurant: Restaurant;
@@ -56,6 +61,7 @@ export const CustomerExperience: React.FC<{
     subtotal: number;
     deliveryFee: number;
     discount: number;
+    couponCode?: string;
     taxes: number;
     total: number;
   }) => Promise<Order | null>;
@@ -69,7 +75,9 @@ export const CustomerExperience: React.FC<{
 }> = ({
   user,
   restaurants,
+  categories,
   menuItems,
+  coupons,
   orders,
   supportTickets,
   onUpdateLocation,
@@ -86,13 +94,13 @@ export const CustomerExperience: React.FC<{
   // Discovery filters
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [activePromoCode, setActivePromoCode] = useState('BITQFIRST');
-  const [selectedMenuSection, setSelectedMenuSection] = useState<
-    MenuCategory | 'All'
-  >('All');
+  const [selectedMenuSection, setSelectedMenuSection] = useState<string>('All');
 
-  // Cart state
+  // Cart & Coupon state
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
   // Support form state
@@ -114,10 +122,9 @@ export const CustomerExperience: React.FC<{
   );
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-  // Filtered restaurants
+  // Filtered restaurants (Show open restaurants first, closed kitchens dimmed)
   const filteredRestaurants = useMemo(() => {
     return restaurants.filter((r) => {
-      if (!r.is_open) return false;
       const matchesCategory =
         selectedCategory === 'All' ||
         r.cuisine.toLowerCase().includes(selectedCategory.toLowerCase()) ||
@@ -143,6 +150,20 @@ export const CustomerExperience: React.FC<{
     });
   }, [restaurants, menuItems, selectedCategory, searchQuery]);
 
+  // Dynamic Restaurant Menu Sections (from custom RestaurantCategory + item categories)
+  const restaurantMenuSections = useMemo(() => {
+    if (!selectedRestaurant) return ['All'];
+    const customCats = categories
+      .filter((c) => c.restaurant_id === selectedRestaurant.id && c.active)
+      .sort((a, b) => a.display_order - b.display_order)
+      .map((c) => c.name);
+    const dishCats = menuItems
+      .filter((m) => m.restaurant_id === selectedRestaurant.id)
+      .map((m) => m.category);
+    const unique = Array.from(new Set(['All', ...customCats, ...dishCats]));
+    return unique;
+  }, [selectedRestaurant, categories, menuItems]);
+
   // Cart helpers
   const totalCartItems = useMemo(
     () => cart.reduce((acc, item) => acc + item.quantity, 0),
@@ -154,8 +175,8 @@ export const CustomerExperience: React.FC<{
   };
 
   const handleAddToCart = (item: MenuItem, restaurant: Restaurant) => {
+    if (!restaurant.is_open) return;
     setCart((prev) => {
-      // If cart has items from another restaurant, replace cleanly or keep same restaurant
       const existingDiffRestaurant =
         prev.length > 0 && prev[0].restaurant.id !== restaurant.id;
       const baseCart = existingDiffRestaurant ? [] : prev;
@@ -185,7 +206,7 @@ export const CustomerExperience: React.FC<{
     );
   };
 
-  // Cart Pricing Math
+  // Cart Subtotal & Coupon Validation Math
   const cartSubtotal = useMemo(
     () =>
       cart.reduce(
@@ -195,20 +216,74 @@ export const CustomerExperience: React.FC<{
     [cart]
   );
 
-  const activeDeal = CURATED_DEALS.find((d) => d.code === activePromoCode);
+  const validateAndApplyCoupon = (codeRaw: string) => {
+    setCouponError(null);
+    const code = codeRaw.trim().toUpperCase();
+    if (!code) {
+      setAppliedCoupon(null);
+      return;
+    }
+
+    const found = coupons.find((c) => c.code.toUpperCase() === code);
+    if (!found || !found.active) {
+      setAppliedCoupon(null);
+      setCouponError('Coupon code is invalid.');
+      return;
+    }
+
+    // Check restaurant match if coupon is restaurant-specific
+    if (
+      found.restaurant_id !== 'GLOBAL' &&
+      cart.length > 0 &&
+      cart[0].restaurant.id !== found.restaurant_id
+    ) {
+      setAppliedCoupon(null);
+      setCouponError('This coupon is only valid for a specific restaurant.');
+      return;
+    }
+
+    // Check expiry date
+    const now = new Date();
+    const exp = new Date(found.expiry_date);
+    if (exp.getTime() < now.getTime()) {
+      setAppliedCoupon(null);
+      setCouponError('This coupon has expired.');
+      return;
+    }
+
+    // Check minimum order requirement
+    if (cartSubtotal > 0 && cartSubtotal < found.minimum_order_value) {
+      const diff = Math.ceil(found.minimum_order_value - cartSubtotal);
+      setAppliedCoupon(null);
+      setCouponError(`Add ₹${diff} more to use this coupon.`);
+      return;
+    }
+
+    setAppliedCoupon(found);
+    setCouponInput(found.code);
+  };
+
   const cartDiscount = useMemo(() => {
-    if (!activeDeal || cartSubtotal < activeDeal.minOrder) return 0;
-    return Number((cartSubtotal * activeDeal.discountRate).toFixed(2));
-  }, [activeDeal, cartSubtotal]);
+    if (!appliedCoupon || cartSubtotal < appliedCoupon.minimum_order_value) {
+      return 0;
+    }
+    if (appliedCoupon.discount_type === 'FLAT') {
+      return Math.min(appliedCoupon.discount_value, cartSubtotal);
+    }
+    const raw = (cartSubtotal * appliedCoupon.discount_value) / 100;
+    return Math.min(
+      Math.round(raw),
+      appliedCoupon.maximum_discount || Math.round(raw)
+    );
+  }, [appliedCoupon, cartSubtotal]);
 
   const cartDeliveryFee = useMemo(() => {
     if (cart.length === 0) return 0;
-    if (activePromoCode === 'FREEDEL' && cartSubtotal >= 15) return 0;
-    return 2.99;
-  }, [cart.length, activePromoCode, cartSubtotal]);
+    return 40;
+  }, [cart.length]);
 
   const cartTaxes = useMemo(
-    () => Number(((cartSubtotal - cartDiscount) * 0.08).toFixed(2)),
+    () => Math.round(Math.max(0, cartSubtotal - cartDiscount) * 0.05),
     [cartSubtotal, cartDiscount]
   );
 
@@ -216,14 +291,7 @@ export const CustomerExperience: React.FC<{
     () =>
       Math.max(
         0,
-        Number(
-          (
-            cartSubtotal -
-            cartDiscount +
-            cartDeliveryFee +
-            cartTaxes
-          ).toFixed(2)
-        )
+        Math.round(cartSubtotal - cartDiscount + cartDeliveryFee + cartTaxes)
       ),
     [cartSubtotal, cartDiscount, cartDeliveryFee, cartTaxes]
   );
@@ -238,11 +306,14 @@ export const CustomerExperience: React.FC<{
         subtotal: cartSubtotal,
         deliveryFee: cartDeliveryFee,
         discount: cartDiscount,
+        couponCode: appliedCoupon?.code,
         taxes: cartTaxes,
         total: cartTotal,
       });
       if (created) {
         setCart([]);
+        setAppliedCoupon(null);
+        setCouponInput('');
         setSelectedRestaurant(null);
         setTrackingOrder(created);
         setActiveTab('orders');
@@ -252,7 +323,6 @@ export const CustomerExperience: React.FC<{
     }
   };
 
-  // Keep live tracked order synced with incoming Firestore updates
   const liveTrackedOrder = useMemo(() => {
     if (!trackingOrder) return null;
     return orders.find((o) => o.id === trackingOrder.id) || trackingOrder;
@@ -325,7 +395,7 @@ export const CustomerExperience: React.FC<{
       />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 space-y-10">
-        {/* LIVE ORDER TRACKING DEDICATED EXPERIENCE */}
+        {/* LIVE ORDER TRACKING WITH INTERACTIVE LEAFLET ROUTE MAP */}
         {liveTrackedOrder ? (
           <section className="space-y-6 animate-fadeIn">
             <div className="flex items-center justify-between">
@@ -343,113 +413,66 @@ export const CustomerExperience: React.FC<{
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Clean Interactive Map Layer with Floating Glass Cards */}
-              <div className="lg:col-span-7 relative rounded-3xl overflow-hidden border border-stone-200/80 bg-[#EAE6DF] min-h-[420px] p-6 flex flex-col justify-between">
-                {/* Architectural Street Grid SVG Map Backdrop */}
-                <svg
-                  className="absolute inset-0 w-full h-full object-cover opacity-60 pointer-events-none"
-                  viewBox="0 0 800 500"
-                  fill="none"
-                >
-                  <rect width="800" height="500" fill="#EAE6DF" />
-                  <path
-                    d="M0 120 H800 M0 260 H800 M0 390 H800 M160 0 V500 M380 0 V500 M620 0 V500"
-                    stroke="#DCD6CD"
-                    strokeWidth="16"
-                  />
-                  <path
-                    d="M80 0 L720 500"
-                    stroke="#E2DDD5"
-                    strokeWidth="24"
-                  />
-                  {/* Animated Route Path between Restaurant and Customer */}
-                  <path
-                    d="M180 340 C290 310, 450 200, 610 150"
-                    stroke="#064E3B"
-                    strokeWidth="5"
-                    strokeDasharray="10 8"
-                    strokeLinecap="round"
-                  />
-                  {/* Restaurant Origin Pin */}
-                  <circle
-                    cx="180"
-                    cy="340"
-                    r="12"
-                    fill="#064E3B"
-                    stroke="#FFFFFF"
-                    strokeWidth="4"
-                  />
-                  {/* Courier Midpoint Pulse */}
-                  <circle
-                    cx="410"
-                    cy="240"
-                    r="16"
-                    fill="#D97706"
-                    fillOpacity="0.25"
-                  />
-                  <circle
-                    cx="410"
-                    cy="240"
-                    r="8"
-                    fill="#D97706"
-                    stroke="#FFFFFF"
-                    strokeWidth="3"
-                  />
-                  {/* Customer Destination Pin */}
-                  <circle
-                    cx="610"
-                    cy="150"
-                    r="12"
-                    fill="#18181B"
-                    stroke="#FFFFFF"
-                    strokeWidth="4"
-                  />
-                </svg>
+              <div className="lg:col-span-7 space-y-4">
+                <InteractiveRouteMap
+                  restaurantName={liveTrackedOrder.restaurant_name}
+                  restaurantCoords={[
+                    liveTrackedOrder.restaurant_lat || 12.9784,
+                    liveTrackedOrder.restaurant_lng || 77.6408,
+                  ]}
+                  customerName={liveTrackedOrder.customer_name}
+                  customerAddress={liveTrackedOrder.delivery_address}
+                  customerCoords={[
+                    liveTrackedOrder.delivery_lat || user.lat || 12.961,
+                    liveTrackedOrder.delivery_lng || user.lng || 77.638,
+                  ]}
+                  courierName={liveTrackedOrder.delivery_partner_name}
+                  courierCoords={
+                    liveTrackedOrder.courier_lat && liveTrackedOrder.courier_lng
+                      ? [
+                          liveTrackedOrder.courier_lat,
+                          liveTrackedOrder.courier_lng,
+                        ]
+                      : liveTrackedOrder.delivery_partner_uid
+                      ? [
+                          ((liveTrackedOrder.restaurant_lat || 12.9784) +
+                            (liveTrackedOrder.delivery_lat || 12.961)) /
+                            2,
+                          ((liveTrackedOrder.restaurant_lng || 77.6408) +
+                            (liveTrackedOrder.delivery_lng || 77.638)) /
+                            2,
+                        ]
+                      : undefined
+                  }
+                  etaText={liveTrackedOrder.estimated_arrival}
+                  distanceKm={liveTrackedOrder.distance_km}
+                  statusLabel={liveTrackedOrder.status.replace(/_/g, ' ')}
+                />
 
-                {/* Top Floating Glass Card: Estimated Arrival & Status */}
-                <div className="relative z-10 glass-elevated rounded-2xl p-4 flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-xs text-stone-500">Estimated Arrival</p>
-                    <p className="text-xl font-bold text-stone-900 font-display tabular-nums">
-                      {liveTrackedOrder.estimated_arrival}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-stone-500">Current Stage</p>
-                    <p className="text-sm font-semibold text-emerald-900">
-                      {liveTrackedOrder.status.replace(/_/g, ' ')}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Bottom Floating Glass Card: Route Endpoints & Courier */}
-                <div className="relative z-10 glass-elevated rounded-2xl p-4 space-y-3">
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2 text-stone-700">
-                      <Navigation className="w-4 h-4 text-emerald-900" />
-                      <span className="font-semibold">
-                        {liveTrackedOrder.restaurant_name}
-                      </span>
+                {/* Courier Details Card */}
+                {liveTrackedOrder.delivery_partner_name && (
+                  <GlassCard className="p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-stone-500">
+                        Assigned Delivery Partner
+                      </p>
+                      <h4 className="text-base font-semibold text-stone-900">
+                        {liveTrackedOrder.delivery_partner_name}
+                      </h4>
                     </div>
-                    <span className="font-mono text-stone-500 tabular-nums">
-                      {liveTrackedOrder.distance_km} km route
-                    </span>
-                  </div>
-
-                  <div className="pt-2 border-t border-stone-200/60 flex items-center justify-between text-xs text-stone-600">
-                    <span>
-                      Delivering to:{' '}
-                      <strong className="text-stone-900">
-                        {liveTrackedOrder.delivery_address}
-                      </strong>
-                    </span>
-                    <span>
-                      {liveTrackedOrder.delivery_partner_name
-                        ? `Courier: ${liveTrackedOrder.delivery_partner_name}`
-                        : 'Assigning nearby courier'}
-                    </span>
-                  </div>
-                </div>
+                    <div className="text-right">
+                      <span className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-900">
+                        <Star className="w-4 h-4 fill-emerald-800 text-emerald-800" />
+                        {(
+                          liveTrackedOrder.delivery_partner_rating || 4.8
+                        ).toFixed(1)}
+                      </span>
+                      <p className="text-xs text-stone-500">
+                        ETA {liveTrackedOrder.estimated_arrival}
+                      </p>
+                    </div>
+                  </GlassCard>
+                )}
               </div>
 
               {/* Right Column: Live Order Status Timeline & Summary */}
@@ -457,11 +480,11 @@ export const CustomerExperience: React.FC<{
                 <GlassCard className="p-6 space-y-5">
                   <div>
                     <h3 className="text-lg font-semibold text-stone-900 font-display">
-                      Live Kitchen & Courier Timeline
+                      Your Order Status
                     </h3>
                     <p className="text-xs text-stone-500 mt-0.5">
-                      Real-time updates synced directly from the kitchen and
-                      delivery partner
+                      Real-time updates synced between restaurant, courier, and
+                      your table
                     </p>
                   </div>
 
@@ -476,7 +499,7 @@ export const CustomerExperience: React.FC<{
                     </p>
                     <div className="flex items-center justify-between pt-2 font-mono text-sm font-semibold text-stone-900 tabular-nums">
                       <span>Total Paid</span>
-                      <span>${liveTrackedOrder.total.toFixed(2)}</span>
+                      <span>₹{liveTrackedOrder.total.toFixed(0)}</span>
                     </div>
                   </div>
                 </GlassCard>
@@ -488,14 +511,16 @@ export const CustomerExperience: React.FC<{
           <section className="space-y-8 animate-fadeIn">
             <button
               type="button"
-              onClick={() => setSelectedRestaurant(null)}
+              onClick={() => {
+                setSelectedRestaurant(null);
+                setSelectedMenuSection('All');
+              }}
               className="min-h-[44px] inline-flex items-center gap-2 text-sm font-semibold text-stone-700 hover:text-stone-900"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Back to Discovery</span>
             </button>
 
-            {/* Hero Restaurant Banner with Measured Scrim */}
             <div className="relative rounded-3xl overflow-hidden aspect-[16/9] max-h-[340px] w-full bg-stone-200 shadow-sm">
               <ResilientImage
                 src={selectedRestaurant.image_url}
@@ -518,7 +543,9 @@ export const CustomerExperience: React.FC<{
                       {selectedRestaurant.name}
                     </h1>
                     <p className="text-xs sm:text-sm text-emerald-200 mt-1">
-                      {selectedRestaurant.offer_text}
+                      {selectedRestaurant.is_open
+                        ? selectedRestaurant.offer_text
+                        : '🔴 Kitchen Closed — Currently Not Accepting New Orders'}
                     </p>
                   </div>
                   <div className="glass-elevated text-stone-900 px-4 py-2.5 rounded-2xl flex items-center gap-4 text-xs font-semibold tabular-nums">
@@ -535,14 +562,9 @@ export const CustomerExperience: React.FC<{
               </div>
             </div>
 
-            {/* Menu Category Interactive Filter Bar */}
+            {/* Dynamic Restaurant Categories Filter Bar */}
             <div className="flex items-center gap-2 overflow-x-auto pb-2">
-              {(
-                ['All', 'Starters', 'Main Course', 'Beverages', 'Desserts'] as (
-                  | MenuCategory
-                  | 'All'
-                )[]
-              ).map((cat) => (
+              {restaurantMenuSections.map((cat) => (
                 <button
                   key={cat}
                   type="button"
@@ -558,7 +580,6 @@ export const CustomerExperience: React.FC<{
               ))}
             </div>
 
-            {/* Menu Items Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {menuItems
                 .filter(
@@ -578,7 +599,6 @@ export const CustomerExperience: React.FC<{
                 ))}
             </div>
 
-            {/* Sticky Floating Bag Preview when Cart has items */}
             {totalCartItems > 0 && (
               <div className="sticky bottom-20 md:bottom-6 z-30 max-w-xl mx-auto">
                 <div className="glass-elevated rounded-3xl p-4 border border-emerald-900/20 flex items-center justify-between gap-4 shadow-xl">
@@ -588,7 +608,7 @@ export const CustomerExperience: React.FC<{
                       from {cart[0].restaurant.name}
                     </p>
                     <p className="text-base font-mono font-bold text-stone-900 tabular-nums">
-                      ${cartSubtotal.toFixed(2)}{' '}
+                      ₹{cartSubtotal.toFixed(0)}{' '}
                       <span className="text-xs font-sans font-normal text-stone-500">
                         plus taxes
                       </span>
@@ -608,11 +628,10 @@ export const CustomerExperience: React.FC<{
             )}
           </section>
         ) : (
-          /* STANDARD CUSTOMER TABS */
           <>
-            {(activeTab === 'home' || activeTab === 'search') && (
+            {/* HOME DISCOVERY VIEW */}
+            {activeTab === 'home' && (
               <div className="space-y-10 animate-fadeIn">
-                {/* Top Discovery Bar: Location + Search */}
                 <section className="glass-elevated rounded-3xl p-5 sm:p-7 space-y-5">
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
                     <div className="md:col-span-5">
@@ -630,7 +649,6 @@ export const CustomerExperience: React.FC<{
                     </div>
                   </div>
 
-                  {/* Food Categories Interactive Strip */}
                   <div className="flex items-center gap-2.5 overflow-x-auto pt-1 pb-1">
                     {FOOD_CATEGORIES.map((cat) => (
                       <CategoryCard
@@ -644,30 +662,50 @@ export const CustomerExperience: React.FC<{
                   </div>
                 </section>
 
-                {/* Horizontal Glass Deals Section (Shown on Home when not actively searching) */}
-                {activeTab === 'home' && !searchQuery && (
+                {/* Available Coupons Strip */}
+                {!searchQuery && (
                   <section className="space-y-4">
                     <div className="flex items-baseline justify-between">
                       <div>
                         <h2 className="text-xl font-bold text-stone-900 font-display">
-                          Curated Table Privileges
+                          Available Offers & Coupons
                         </h2>
                         <p className="text-xs text-stone-500 mt-0.5">
-                          Select a privilege to apply automatically to your bag
+                          Apply any active coupon code directly in your cart
                         </p>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('offers')}
+                        className="text-xs font-semibold text-emerald-900 hover:underline"
+                      >
+                        View all coupons →
+                      </button>
                     </div>
                     <div className="flex gap-4 overflow-x-auto pb-2">
-                      {CURATED_DEALS.map((deal) => (
-                        <OfferCard
-                          key={deal.id}
-                          code={deal.code}
-                          title={deal.title}
-                          subtitle={deal.subtitle}
-                          activeCode={activePromoCode}
-                          onApply={setActivePromoCode}
-                        />
-                      ))}
+                      {coupons
+                        .filter(
+                          (c) =>
+                            c.active &&
+                            new Date(c.expiry_date).getTime() > Date.now()
+                        )
+                        .map((cpn) => (
+                          <OfferCard
+                            key={cpn.id}
+                            code={cpn.code}
+                            title={
+                              cpn.discount_type === 'PERCENTAGE'
+                                ? `${cpn.discount_value}% OFF up to ₹${cpn.maximum_discount}`
+                                : `₹${cpn.discount_value} OFF`
+                            }
+                            subtitle={`On orders above ₹${cpn.minimum_order_value} · ${cpn.description}`}
+                            activeCode={appliedCoupon?.code}
+                            onApply={(code) => {
+                              setCouponInput(code);
+                              validateAndApplyCoupon(code);
+                            }}
+                          />
+                        ))}
                     </div>
                   </section>
                 )}
@@ -683,7 +721,7 @@ export const CustomerExperience: React.FC<{
                       </h2>
                       <p className="text-xs text-stone-500 mt-0.5">
                         Showing {filteredRestaurants.length} curated partners
-                        delivering to {user.location}
+                        near {user.location}
                       </p>
                     </div>
                     {(searchQuery || selectedCategory !== 'All') && (
@@ -706,10 +744,6 @@ export const CustomerExperience: React.FC<{
                       <h3 className="text-lg font-semibold text-stone-900 font-display">
                         No kitchens match your current filter
                       </h3>
-                      <p className="text-xs text-stone-500 max-w-sm mx-auto">
-                        Try clearing your search query or exploring all
-                        neighborhood categories.
-                      </p>
                       <GlassButton
                         variant="secondary"
                         onClick={() => {
@@ -735,9 +769,84 @@ export const CustomerExperience: React.FC<{
               </div>
             )}
 
-            {/* CART VIEW */}
+            {/* DEDICATED OFFERS / COUPONS PAGE */}
+            {activeTab === 'offers' && (
+              <section className="max-w-4xl mx-auto space-y-6 animate-fadeIn">
+                <div>
+                  <h1 className="text-2xl font-bold text-stone-900 font-display">
+                    Available Offers & Coupons
+                  </h1>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    Tap APPLY on any coupon to attach it to your dining bag
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {coupons
+                    .filter((c) => c.active)
+                    .map((cpn) => {
+                      const isExpired =
+                        new Date(cpn.expiry_date).getTime() < Date.now();
+                      const isApplied =
+                        appliedCoupon?.code.toUpperCase() ===
+                        cpn.code.toUpperCase();
+                      return (
+                        <GlassCard
+                          key={cpn.id}
+                          className="p-6 flex flex-col justify-between gap-4"
+                        >
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-xs text-stone-500">
+                              <span className="font-mono font-bold text-emerald-900 text-sm">
+                                {cpn.code}
+                              </span>
+                              <span>
+                                {isExpired
+                                  ? 'Expired'
+                                  : `Valid until ${cpn.expiry_date}`}
+                              </span>
+                            </div>
+                            <h3 className="text-xl font-bold text-stone-900 font-display">
+                              {cpn.discount_type === 'PERCENTAGE'
+                                ? `${cpn.discount_value}% OFF (Maximum discount ₹${cpn.maximum_discount})`
+                                : `₹${cpn.discount_value} OFF`}
+                            </h3>
+                            <p className="text-xs text-stone-600">
+                              On orders above ₹{cpn.minimum_order_value} ·{' '}
+                              {cpn.description}
+                            </p>
+                          </div>
+
+                          <div className="pt-3 border-t border-stone-200/60 flex items-center justify-between">
+                            <span className="text-xs text-stone-500">
+                              Min order ₹{cpn.minimum_order_value}
+                            </span>
+                            <GlassButton
+                              variant={isApplied ? 'primary' : 'secondary'}
+                              disabled={isExpired}
+                              onClick={() => {
+                                setCouponInput(cpn.code);
+                                validateAndApplyCoupon(cpn.code);
+                                setActiveTab('cart');
+                              }}
+                            >
+                              {isApplied
+                                ? '✓ Applied'
+                                : isExpired
+                                ? 'Expired'
+                                : 'APPLY'}
+                            </GlassButton>
+                          </div>
+                        </GlassCard>
+                      );
+                    })}
+                </div>
+              </section>
+            )}
+
+            {/* CART VIEW WITH FULL COUPON VALIDATION & BILL BREAKDOWN */}
             {activeTab === 'cart' && (
-              <section className="max-w-3xl mx-auto space-y-6 animate-fadeIn">
+              <section className="max-w-4xl mx-auto space-y-6 animate-fadeIn">
                 <div>
                   <h1 className="text-2xl font-bold text-stone-900 font-display">
                     Your Dining Bag
@@ -781,7 +890,11 @@ export const CustomerExperience: React.FC<{
                           </div>
                           <button
                             type="button"
-                            onClick={() => setCart([])}
+                            onClick={() => {
+                              setCart([]);
+                              setAppliedCoupon(null);
+                              setCouponError(null);
+                            }}
                             className="inline-flex items-center gap-1 text-xs font-medium text-rose-700 hover:text-rose-900"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -800,7 +913,7 @@ export const CustomerExperience: React.FC<{
                                   {entry.menuItem.name}
                                 </p>
                                 <p className="text-xs font-mono text-stone-500 tabular-nums mt-0.5">
-                                  ${entry.menuItem.price.toFixed(2)} each
+                                  ₹{entry.menuItem.price.toFixed(0)} each
                                 </p>
                               </div>
                               <QuantitySelector
@@ -816,14 +929,83 @@ export const CustomerExperience: React.FC<{
                                 }
                               />
                               <span className="text-sm font-mono font-semibold text-stone-900 tabular-nums w-16 text-right">
-                                $
+                                ₹
                                 {(
                                   entry.menuItem.price * entry.quantity
-                                ).toFixed(2)}
+                                ).toFixed(0)}
                               </span>
                             </div>
                           ))}
                         </div>
+                      </GlassCard>
+
+                      {/* Apply Coupon Box in Cart */}
+                      <GlassCard className="p-5 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
+                            <Tag className="w-4 h-4 text-emerald-900" />
+                            <span>Apply Coupon</span>
+                          </h4>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab('offers')}
+                            className="text-xs font-semibold text-emerald-900 hover:underline"
+                          >
+                            Browse coupons
+                          </button>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={couponInput}
+                            onChange={(e) =>
+                              setCouponInput(e.target.value.toUpperCase())
+                            }
+                            placeholder="Enter coupon code (e.g. SAVE20)"
+                            className="flex-1 min-h-[46px] px-4 py-2 rounded-2xl bg-white border border-stone-200 text-sm font-mono uppercase focus:outline-none focus:border-emerald-800"
+                          />
+                          <GlassButton
+                            variant="primary"
+                            onClick={() => validateAndApplyCoupon(couponInput)}
+                          >
+                            APPLY
+                          </GlassButton>
+                        </div>
+
+                        {couponError && (
+                          <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 flex items-center gap-2 text-xs text-rose-900">
+                            <AlertCircle className="w-4 h-4 text-rose-700 shrink-0" />
+                            <span>{couponError}</span>
+                          </div>
+                        )}
+
+                        {appliedCoupon && !couponError && (
+                          <div className="p-3.5 rounded-2xl bg-emerald-900/10 border border-emerald-900/20 flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <p className="text-xs font-semibold text-emerald-950 flex items-center gap-1.5">
+                                <Check className="w-4 h-4 text-emerald-800" />
+                                <span>Coupon applied · {appliedCoupon.code}</span>
+                              </p>
+                              <p className="text-xs text-emerald-800">
+                                {appliedCoupon.discount_type === 'PERCENTAGE'
+                                  ? `${appliedCoupon.discount_value}% OFF (Saved ₹${cartDiscount})`
+                                  : `Flat ₹${appliedCoupon.discount_value} OFF`}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAppliedCoupon(null);
+                                setCouponInput('');
+                                setCouponError(null);
+                              }}
+                              className="text-xs font-semibold text-rose-700 hover:underline"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
                       </GlassCard>
                     </div>
 
@@ -836,37 +1018,33 @@ export const CustomerExperience: React.FC<{
 
                         <div className="space-y-2.5 text-xs text-stone-600">
                           <div className="flex justify-between font-mono tabular-nums">
-                            <span className="font-sans">Item Subtotal</span>
-                            <span>${cartSubtotal.toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between font-mono tabular-nums">
-                            <span className="font-sans">
-                              Glass-Layer Delivery Fee
-                            </span>
-                            <span>${cartDeliveryFee.toFixed(2)}</span>
+                            <span className="font-sans">Subtotal</span>
+                            <span>₹{cartSubtotal.toFixed(0)}</span>
                           </div>
                           {cartDiscount > 0 && (
-                            <div className="flex justify-between font-mono tabular-nums text-emerald-800 font-medium">
+                            <div className="flex justify-between font-mono tabular-nums text-emerald-800 font-semibold">
                               <span className="font-sans">
-                                Privilege Discount ({activePromoCode})
+                                Discount ({appliedCoupon?.code})
                               </span>
-                              <span>-${cartDiscount.toFixed(2)}</span>
+                              <span>-₹{cartDiscount.toFixed(0)}</span>
                             </div>
                           )}
                           <div className="flex justify-between font-mono tabular-nums">
-                            <span className="font-sans">
-                              Taxes & Kitchen Packaging
-                            </span>
-                            <span>${cartTaxes.toFixed(2)}</span>
+                            <span className="font-sans">Delivery Fee</span>
+                            <span>₹{cartDeliveryFee.toFixed(0)}</span>
+                          </div>
+                          <div className="flex justify-between font-mono tabular-nums">
+                            <span className="font-sans">Taxes</span>
+                            <span>₹{cartTaxes.toFixed(0)}</span>
                           </div>
                         </div>
 
                         <div className="pt-3 border-t border-stone-200/70 flex items-baseline justify-between">
                           <span className="text-sm font-semibold text-stone-900">
-                            Total Payable
+                            Total
                           </span>
                           <span className="text-xl font-mono font-bold text-stone-900 tabular-nums">
-                            ${cartTotal.toFixed(2)}
+                            ₹{cartTotal.toFixed(0)}
                           </span>
                         </div>
 
@@ -899,7 +1077,6 @@ export const CustomerExperience: React.FC<{
                   </p>
                 </div>
 
-                {/* Active Orders */}
                 <div className="space-y-4">
                   <h2 className="text-sm font-semibold text-stone-700">
                     Active Orders ({activeOrders.length})
@@ -909,10 +1086,6 @@ export const CustomerExperience: React.FC<{
                       <Clock className="w-6 h-6 text-stone-400 mx-auto" />
                       <p className="text-sm font-medium text-stone-700">
                         No active orders right now
-                      </p>
-                      <p className="text-xs text-stone-500">
-                        When you place an order, its real-time kitchen and
-                        courier timeline appears here.
                       </p>
                     </GlassCard>
                   ) : (
@@ -928,7 +1101,6 @@ export const CustomerExperience: React.FC<{
                   )}
                 </div>
 
-                {/* Past Orders */}
                 <div className="space-y-4">
                   <h2 className="text-sm font-semibold text-stone-700">
                     Past Orders ({pastOrders.length})
@@ -957,10 +1129,6 @@ export const CustomerExperience: React.FC<{
                   <h1 className="text-2xl font-bold text-stone-900 font-display">
                     Help & Concierge Support
                   </h1>
-                  <p className="text-xs text-stone-500 mt-0.5">
-                    Dedicated assistance for orders, refunds, kitchens, and
-                    delivery partners
-                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -1037,7 +1205,7 @@ export const CustomerExperience: React.FC<{
                           rows={4}
                           value={ticketMessage}
                           onChange={(e) => setTicketMessage(e.target.value)}
-                          placeholder="Share any relevant details so we can resolve this quickly..."
+                          placeholder="Share any relevant details..."
                           maxLength={800}
                           required
                           className="w-full p-4 rounded-2xl bg-white/85 border border-stone-200/90 text-sm text-stone-900 focus:outline-none focus:border-emerald-800"
@@ -1065,10 +1233,6 @@ export const CustomerExperience: React.FC<{
                         <LifeBuoy className="w-7 h-7 text-stone-400 mx-auto" />
                         <p className="text-sm font-medium text-stone-700">
                           No support tickets yet
-                        </p>
-                        <p className="text-xs text-stone-500">
-                          If you ever experience an issue with an order, you can
-                          track its resolution here.
                         </p>
                       </GlassCard>
                     ) : (
@@ -1106,13 +1270,6 @@ export const CustomerExperience: React.FC<{
                     <h2 className="text-lg font-semibold text-stone-900 font-display">
                       Personal & Delivery Preferences
                     </h2>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('help')}
-                      className="text-xs font-semibold text-emerald-900 hover:underline"
-                    >
-                      Need Help? Open Concierge Desk →
-                    </button>
                   </div>
 
                   <form
