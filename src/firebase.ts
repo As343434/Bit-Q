@@ -1,10 +1,19 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+
+const firebaseConfig = {
+  apiKey: 'AIzaSyBS5NkhTdnF9k9vSv0zUqb2wKZ2hcIDgXA',
+  authDomain: 'biteq-c05b8.firebaseapp.com',
+  projectId: 'biteq-c05b8',
+  storageBucket: 'biteq-c05b8.firebasestorage.app',
+  messagingSenderId: '986109386975',
+  appId: '1:986109386975:web:f6c44e14fac851489d496a',
+  measurementId: 'G-QZB9HPWKQ0',
+};
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
