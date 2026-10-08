@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Plus,
   Edit3,
@@ -133,8 +133,8 @@ export const RestaurantPartnerExperience: React.FC<{
   const [renamingCatText, setRenamingCatText] = useState('');
 
   // Create Offer / Coupon State
-  const [cpnCode, setCpnCode] = useState('SAVE20');
-  const [cpnDesc, setCpnDesc] = useState('Special kitchen discount');
+  const [cpnCode, setCpnCode] = useState('');
+  const [cpnDesc, setCpnDesc] = useState('');
   const [cpnType, setCpnType] = useState<'PERCENTAGE' | 'FLAT'>('PERCENTAGE');
   const [cpnValue, setCpnValue] = useState('20');
   const [cpnMinOrder, setCpnMinOrder] = useState('500');
@@ -143,22 +143,22 @@ export const RestaurantPartnerExperience: React.FC<{
   const [isSavingCoupon, setIsSavingCoupon] = useState(false);
 
   // Restaurant Profile State
-  const [restName, setRestName] = useState(
-    restaurant?.name || `${user.name}'s Artisanal Kitchen`
-  );
-  const [restCuisine, setRestCuisine] = useState(
-    restaurant?.cuisine || 'Pizza · Contemporary'
-  );
-  const [restPhone, setRestPhone] = useState(
-    restaurant?.contact_phone || '+91 98450 23456'
-  );
-  const [restHours, setRestHours] = useState(
-    restaurant?.operating_hours || '11:00 AM – 10:30 PM'
-  );
-  const [restOffer, setRestOffer] = useState(
-    restaurant?.offer_text || '20% OFF above ₹499'
-  );
+  const [restName, setRestName] = useState(restaurant?.name || '');
+  const [restCuisine, setRestCuisine] = useState(restaurant?.cuisine || '');
+  const [restPhone, setRestPhone] = useState(restaurant?.contact_phone || '');
+  const [restHours, setRestHours] = useState(restaurant?.operating_hours || '');
+  const [restOffer, setRestOffer] = useState(restaurant?.offer_text || '');
   const [isSavingRest, setIsSavingRest] = useState(false);
+
+  useEffect(() => {
+    if (restaurant) {
+      setRestName(restaurant.name || '');
+      setRestCuisine(restaurant.cuisine || '');
+      setRestPhone(restaurant.contact_phone || '');
+      setRestHours(restaurant.operating_hours || '');
+      setRestOffer(restaurant.offer_text || '');
+    }
+  }, [restaurant]);
 
   const myRestaurantId =
     restaurant?.id ||
@@ -203,8 +203,7 @@ export const RestaurantPartnerExperience: React.FC<{
     return orders.filter(
       (o) =>
         o.restaurant_id === myRestaurantId ||
-        o.restaurant_owner_uid === user.google_uid ||
-        o.restaurant_owner_uid === 'system_curated'
+        o.restaurant_owner_uid === user.google_uid
     );
   }, [orders, myRestaurantId, user.google_uid]);
 
@@ -748,76 +747,93 @@ export const RestaurantPartnerExperience: React.FC<{
             </GlassCard>
 
             {/* Menu Dishes List */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {myMenuItems.map((item) => (
-                <GlassCard
-                  key={item.id}
-                  className="p-4 flex items-center justify-between gap-4"
-                >
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div className="w-20 h-20 rounded-2xl overflow-hidden bg-stone-100 shrink-0">
-                      <ResilientImage
-                        src={item.image_url}
-                        alt={item.name}
-                        className="w-full h-full"
-                      />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-xs text-stone-500">
-                        {item.category} ·{' '}
-                        <strong className="font-mono text-stone-900 tabular-nums">
-                          ₹{item.price.toFixed(0)}
-                        </strong>
-                      </span>
-                      <h4 className="text-sm font-semibold text-stone-900 truncate mt-0.5">
-                        {item.name}
-                      </h4>
-                      <p className="text-xs text-stone-500 line-clamp-1 mt-0.5">
-                        {item.description}
-                      </p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onUpdateMenuItem(item.id, {
-                              is_available: !item.is_available,
-                            })
-                          }
-                          className={`min-h-[32px] px-3 py-1 rounded-xl text-xs font-semibold transition-colors ${
-                            item.is_available
-                              ? 'bg-emerald-900/10 text-emerald-900'
-                              : 'bg-stone-200 text-stone-600'
-                          }`}
-                        >
-                          {item.is_available
-                            ? 'Available ✓'
-                            : 'Marked Sold Out'}
-                        </button>
+            {myMenuItems.length === 0 ? (
+              <GlassCard className="p-10 text-center space-y-3">
+                <Utensils className="w-7 h-7 text-stone-400 mx-auto" />
+                <p className="text-sm font-semibold text-stone-800">
+                  Your kitchen menu is empty
+                </p>
+                <p className="text-xs text-stone-500 max-w-sm mx-auto">
+                  Add your signature dishes with prices, categories, and photos
+                  so customers can start ordering.
+                </p>
+                <GlassButton variant="primary" onClick={openAddModal}>
+                  <Plus className="w-4 h-4" />
+                  <span>Add First Dish</span>
+                </GlassButton>
+              </GlassCard>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {myMenuItems.map((item) => (
+                  <GlassCard
+                    key={item.id}
+                    className="p-4 flex items-center justify-between gap-4"
+                  >
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="w-20 h-20 rounded-2xl overflow-hidden bg-stone-100 shrink-0">
+                        <ResilientImage
+                          src={item.image_url}
+                          alt={item.name}
+                          className="w-full h-full"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-xs text-stone-500">
+                          {item.category} ·{' '}
+                          <strong className="font-mono text-stone-900 tabular-nums">
+                            ₹{item.price.toFixed(0)}
+                          </strong>
+                        </span>
+                        <h4 className="text-sm font-semibold text-stone-900 truncate mt-0.5">
+                          {item.name}
+                        </h4>
+                        <p className="text-xs text-stone-500 line-clamp-1 mt-0.5">
+                          {item.description}
+                        </p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onUpdateMenuItem(item.id, {
+                                is_available: !item.is_available,
+                              })
+                            }
+                            className={`min-h-[32px] px-3 py-1 rounded-xl text-xs font-semibold transition-colors ${
+                              item.is_available
+                                ? 'bg-emerald-900/10 text-emerald-900'
+                                : 'bg-stone-200 text-stone-600'
+                            }`}
+                          >
+                            {item.is_available
+                              ? 'Available ✓'
+                              : 'Marked Sold Out'}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex flex-col gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(item)}
-                      aria-label="Edit item"
-                      className="min-w-[40px] min-h-[40px] rounded-xl bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-700"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDeleteMenuItem(item.id)}
-                      aria-label="Delete item"
-                      className="min-w-[40px] min-h-[40px] rounded-xl bg-rose-50 hover:bg-rose-100 flex items-center justify-center text-rose-700"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </GlassCard>
-              ))}
-            </div>
+                    <div className="flex flex-col gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(item)}
+                        aria-label="Edit item"
+                        className="min-w-[40px] min-h-[40px] rounded-xl bg-stone-100 hover:bg-stone-200 flex items-center justify-center text-stone-700"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDeleteMenuItem(item.id)}
+                        aria-label="Delete item"
+                        className="min-w-[40px] min-h-[40px] rounded-xl bg-rose-50 hover:bg-rose-100 flex items-center justify-center text-rose-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </GlassCard>
+                ))}
+              </div>
+            )}
           </section>
         )}
 
@@ -926,57 +942,70 @@ export const RestaurantPartnerExperience: React.FC<{
                 <h2 className="text-base font-semibold text-stone-900 font-display">
                   Active & Scheduled Coupons ({myCoupons.length})
                 </h2>
-                <div className="space-y-3">
-                  {myCoupons.map((cpn) => (
-                    <GlassCard
-                      key={cpn.id}
-                      className="p-5 flex flex-wrap items-center justify-between gap-4"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-emerald-900 text-sm">
-                            {cpn.code}
-                          </span>
-                          <span className="text-xs text-stone-500">
-                            · Used {cpn.used_count} times
-                          </span>
+                {myCoupons.length === 0 ? (
+                  <GlassCard className="p-10 text-center space-y-2">
+                    <Tag className="w-7 h-7 text-stone-400 mx-auto" />
+                    <p className="text-sm font-semibold text-stone-800">
+                      No promotional coupons created yet
+                    </p>
+                    <p className="text-xs text-stone-500">
+                      Create your first coupon code using the form to offer
+                      discounts to customers.
+                    </p>
+                  </GlassCard>
+                ) : (
+                  <div className="space-y-3">
+                    {myCoupons.map((cpn) => (
+                      <GlassCard
+                        key={cpn.id}
+                        className="p-5 flex flex-wrap items-center justify-between gap-4"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-emerald-900 text-sm">
+                              {cpn.code}
+                            </span>
+                            <span className="text-xs text-stone-500">
+                              · Used {cpn.used_count} times
+                            </span>
+                          </div>
+                          <p className="text-sm font-semibold text-stone-900">
+                            {cpn.discount_type === 'PERCENTAGE'
+                              ? `${cpn.discount_value}% OFF (Max ₹${cpn.maximum_discount})`
+                              : `Flat ₹${cpn.discount_value} OFF`}{' '}
+                            on orders above ₹{cpn.minimum_order_value}
+                          </p>
+                          <p className="text-xs text-stone-500">
+                            Valid until {cpn.expiry_date} · {cpn.description}
+                          </p>
                         </div>
-                        <p className="text-sm font-semibold text-stone-900">
-                          {cpn.discount_type === 'PERCENTAGE'
-                            ? `${cpn.discount_value}% OFF (Max ₹${cpn.maximum_discount})`
-                            : `Flat ₹${cpn.discount_value} OFF`}{' '}
-                          on orders above ₹{cpn.minimum_order_value}
-                        </p>
-                        <p className="text-xs text-stone-500">
-                          Valid until {cpn.expiry_date} · {cpn.description}
-                        </p>
-                      </div>
 
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => onToggleCoupon(cpn.id, !cpn.active)}
-                          className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-semibold ${
-                            cpn.active
-                              ? 'bg-emerald-900 text-white'
-                              : 'bg-stone-200 text-stone-600'
-                          }`}
-                        >
-                          {cpn.active ? 'Active' : 'Paused'}
-                        </button>
-                        {cpn.owner_uid === user.google_uid && (
+                        <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => onDeleteCoupon(cpn.id)}
-                            className="p-2 rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100"
+                            onClick={() => onToggleCoupon(cpn.id, !cpn.active)}
+                            className={`min-h-[36px] px-3 py-1.5 rounded-xl text-xs font-semibold ${
+                              cpn.active
+                                ? 'bg-emerald-900 text-white'
+                                : 'bg-stone-200 text-stone-600'
+                            }`}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            {cpn.active ? 'Active' : 'Paused'}
                           </button>
-                        )}
-                      </div>
-                    </GlassCard>
-                  ))}
-                </div>
+                          {cpn.owner_uid === user.google_uid && (
+                            <button
+                              type="button"
+                              onClick={() => onDeleteCoupon(cpn.id)}
+                              className="p-2 rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </GlassCard>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </section>
@@ -988,68 +1017,84 @@ export const RestaurantPartnerExperience: React.FC<{
             <h1 className="text-2xl font-bold text-stone-900 font-display">
               All Kitchen Orders ({restaurantOrders.length})
             </h1>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {restaurantOrders.map((order) => (
-                <GlassCard key={order.id} className="p-5 space-y-4">
-                  <div className="flex justify-between">
-                    <div>
-                      <span className="text-xs font-mono text-stone-500">
-                        #{order.id.slice(-6).toUpperCase()}
+            {restaurantOrders.length === 0 ? (
+              <GlassCard className="p-10 text-center space-y-2">
+                <Store className="w-7 h-7 text-stone-400 mx-auto" />
+                <p className="text-sm font-semibold text-stone-800">
+                  No kitchen orders yet
+                </p>
+                <p className="text-xs text-stone-500">
+                  Customer orders placed for your restaurant will appear here in
+                  real time.
+                </p>
+              </GlassCard>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {restaurantOrders.map((order) => (
+                  <GlassCard key={order.id} className="p-5 space-y-4">
+                    <div className="flex justify-between">
+                      <div>
+                        <span className="text-xs font-mono text-stone-500">
+                          #{order.id.slice(-6).toUpperCase()}
+                        </span>
+                        <h4 className="text-base font-semibold text-stone-900">
+                          {order.customer_name}
+                        </h4>
+                        <p className="text-xs text-stone-500">
+                          {order.delivery_address}
+                        </p>
+                      </div>
+                      <span className="text-base font-mono font-bold text-stone-900 tabular-nums">
+                        ₹{order.total.toFixed(0)}
                       </span>
-                      <h4 className="text-base font-semibold text-stone-900">
-                        {order.customer_name}
-                      </h4>
-                      <p className="text-xs text-stone-500">
-                        {order.delivery_address}
-                      </p>
                     </div>
-                    <span className="text-base font-mono font-bold text-stone-900 tabular-nums">
-                      ₹{order.total.toFixed(0)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-stone-600 py-2 border-y border-stone-200/60">
-                    {order.items_summary}
-                  </p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-emerald-900">
-                      {order.status.replace(/_/g, ' ')}
-                    </span>
-                    <div className="flex gap-2">
-                      {order.status === 'ORDER_PLACED' && (
-                        <GlassButton
-                          variant="primary"
-                          onClick={() =>
-                            onUpdateOrderStatus(order.id, 'RESTAURANT_ACCEPTED')
-                          }
-                        >
-                          Accept
-                        </GlassButton>
-                      )}
-                      {order.status === 'RESTAURANT_ACCEPTED' && (
-                        <GlassButton
-                          variant="primary"
-                          onClick={() =>
-                            onUpdateOrderStatus(order.id, 'FOOD_PREPARING')
-                          }
-                        >
-                          Start Prep
-                        </GlassButton>
-                      )}
-                      {order.status === 'FOOD_PREPARING' && (
-                        <GlassButton
-                          variant="primary"
-                          onClick={() =>
-                            onUpdateOrderStatus(order.id, 'READY_FOR_PICKUP')
-                          }
-                        >
-                          Ready for Pickup
-                        </GlassButton>
-                      )}
+                    <p className="text-xs text-stone-600 py-2 border-y border-stone-200/60">
+                      {order.items_summary}
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-emerald-900">
+                        {order.status.replace(/_/g, ' ')}
+                      </span>
+                      <div className="flex gap-2">
+                        {order.status === 'ORDER_PLACED' && (
+                          <GlassButton
+                            variant="primary"
+                            onClick={() =>
+                              onUpdateOrderStatus(
+                                order.id,
+                                'RESTAURANT_ACCEPTED'
+                              )
+                            }
+                          >
+                            Accept
+                          </GlassButton>
+                        )}
+                        {order.status === 'RESTAURANT_ACCEPTED' && (
+                          <GlassButton
+                            variant="primary"
+                            onClick={() =>
+                              onUpdateOrderStatus(order.id, 'FOOD_PREPARING')
+                            }
+                          >
+                            Start Prep
+                          </GlassButton>
+                        )}
+                        {order.status === 'FOOD_PREPARING' && (
+                          <GlassButton
+                            variant="primary"
+                            onClick={() =>
+                              onUpdateOrderStatus(order.id, 'READY_FOR_PICKUP')
+                            }
+                          >
+                            Ready for Pickup
+                          </GlassButton>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </GlassCard>
-              ))}
-            </div>
+                  </GlassCard>
+                ))}
+              </div>
+            )}
           </section>
         )}
 
@@ -1362,21 +1407,29 @@ export const DeliveryPartnerExperience: React.FC<{
     [orders, user.google_uid]
   );
 
-  // Courier Statistics & Performance Metrics (Synced with actual completed orders + baseline profile stats)
+  // Courier Statistics & Performance Metrics (Strictly real Firestore user profile & completed order data)
   const stats = useMemo(() => {
-    const deliveredCount =
-      (user.orders_delivered || 116) + completedDeliveries.length;
-    const totalRides = (user.total_rides || 128) + completedDeliveries.length;
-    const points = (user.points || 2450) + completedDeliveries.length * 25;
-    const rating = user.courier_rating || 4.8;
-    const acceptanceRate = user.acceptance_rate || 92;
-    const cancelledCount = user.cancelled_deliveries || 4;
-    const streakDays = user.current_streak_days || 7;
+    const deliveredCount = Math.max(
+      user.orders_delivered ?? 0,
+      completedDeliveries.length
+    );
+    const totalRides = Math.max(
+      user.total_rides ?? 0,
+      completedDeliveries.length
+    );
+    const points = Math.max(
+      user.points ?? 0,
+      completedDeliveries.length * 25
+    );
+    const rating = user.courier_rating ?? 5.0;
+    const acceptanceRate = user.acceptance_rate ?? 100;
+    const cancelledCount = user.cancelled_deliveries ?? 0;
+    const streakDays = user.current_streak_days ?? 0;
     const sessionEarnings = completedDeliveries.reduce(
-      (sum, o) => sum + Math.max(65, o.delivery_fee + 35),
+      (sum, o) => sum + Math.max(40, o.delivery_fee),
       0
     );
-    const totalEarnings = (user.total_earnings || 18450) + sessionEarnings;
+    const totalEarnings = Math.max(user.total_earnings ?? 0, sessionEarnings);
     return {
       totalRides,
       deliveredCount,

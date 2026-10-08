@@ -214,15 +214,13 @@ export const OnboardingScreen: React.FC<{
     POPULAR_LOCATIONS_DATA[0]
   );
   const [dietaryPreferences, setDietaryPreferences] = useState('');
-  const [deliveryPreferences, setDeliveryPreferences] = useState(
-    'Leave at door glass concierge table'
-  );
+  const [deliveryPreferences, setDeliveryPreferences] = useState('');
 
   // Restaurant Partner onboarding fields
   const [restaurantName, setRestaurantName] = useState('');
-  const [cuisine, setCuisine] = useState('Pizza · Artisanal Kitchen');
-  const [contactPhone, setContactPhone] = useState('+91 98450 12345');
-  const [operatingHours, setOperatingHours] = useState('11:00 AM – 10:30 PM');
+  const [cuisine, setCuisine] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [operatingHours, setOperatingHours] = useState('');
 
   // Delivery Partner onboarding fields
   const [deliveryRangeKm, setDeliveryRangeKm] = useState(5);

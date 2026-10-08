@@ -323,25 +323,40 @@ export const CustomerExperience: React.FC<{
     }
   };
 
+  const customerOrders = useMemo(
+    () => orders.filter((o) => o.customer_uid === user.google_uid),
+    [orders, user.google_uid]
+  );
+
   const liveTrackedOrder = useMemo(() => {
     if (!trackingOrder) return null;
-    return orders.find((o) => o.id === trackingOrder.id) || trackingOrder;
-  }, [orders, trackingOrder]);
+    return (
+      customerOrders.find((o) => o.id === trackingOrder.id) || trackingOrder
+    );
+  }, [customerOrders, trackingOrder]);
 
   const activeOrders = useMemo(
     () =>
-      orders.filter(
+      customerOrders.filter(
         (o) => o.status !== 'DELIVERED' && o.status !== 'CANCELLED'
       ),
-    [orders]
+    [customerOrders]
   );
 
   const pastOrders = useMemo(
     () =>
-      orders.filter(
+      customerOrders.filter(
         (o) => o.status === 'DELIVERED' || o.status === 'CANCELLED'
       ),
-    [orders]
+    [customerOrders]
+  );
+
+  const activeValidCoupons = useMemo(
+    () =>
+      coupons.filter(
+        (c) => c.active && new Date(c.expiry_date).getTime() > Date.now()
+      ),
+    [coupons]
   );
 
   const handleSupportSubmit = async (e: React.FormEvent) => {
@@ -580,24 +595,40 @@ export const CustomerExperience: React.FC<{
               ))}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {menuItems
-                .filter(
-                  (m) =>
-                    m.restaurant_id === selectedRestaurant.id &&
-                    (selectedMenuSection === 'All' ||
-                      m.category === selectedMenuSection)
-                )
-                .map((item) => (
-                  <FoodCard
-                    key={item.id}
-                    item={item}
-                    quantity={getItemQuantity(item.id)}
-                    onAdd={() => handleAddToCart(item, selectedRestaurant)}
-                    onRemove={() => handleRemoveFromCart(item.id)}
-                  />
-                ))}
-            </div>
+            {menuItems.filter(
+              (m) =>
+                m.restaurant_id === selectedRestaurant.id &&
+                (selectedMenuSection === 'All' ||
+                  m.category === selectedMenuSection)
+            ).length === 0 ? (
+              <GlassCard className="p-10 text-center space-y-2">
+                <p className="text-sm font-semibold text-stone-800">
+                  No dishes available in this category yet
+                </p>
+                <p className="text-xs text-stone-500">
+                  The restaurant partner is currently updating their menu.
+                </p>
+              </GlassCard>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {menuItems
+                  .filter(
+                    (m) =>
+                      m.restaurant_id === selectedRestaurant.id &&
+                      (selectedMenuSection === 'All' ||
+                        m.category === selectedMenuSection)
+                  )
+                  .map((item) => (
+                    <FoodCard
+                      key={item.id}
+                      item={item}
+                      quantity={getItemQuantity(item.id)}
+                      onAdd={() => handleAddToCart(item, selectedRestaurant)}
+                      onRemove={() => handleRemoveFromCart(item.id)}
+                    />
+                  ))}
+              </div>
+            )}
 
             {totalCartItems > 0 && (
               <div className="sticky bottom-20 md:bottom-6 z-30 max-w-xl mx-auto">
@@ -663,7 +694,7 @@ export const CustomerExperience: React.FC<{
                 </section>
 
                 {/* Available Coupons Strip */}
-                {!searchQuery && (
+                {!searchQuery && activeValidCoupons.length > 0 && (
                   <section className="space-y-4">
                     <div className="flex items-baseline justify-between">
                       <div>
@@ -683,29 +714,23 @@ export const CustomerExperience: React.FC<{
                       </button>
                     </div>
                     <div className="flex gap-4 overflow-x-auto pb-2">
-                      {coupons
-                        .filter(
-                          (c) =>
-                            c.active &&
-                            new Date(c.expiry_date).getTime() > Date.now()
-                        )
-                        .map((cpn) => (
-                          <OfferCard
-                            key={cpn.id}
-                            code={cpn.code}
-                            title={
-                              cpn.discount_type === 'PERCENTAGE'
-                                ? `${cpn.discount_value}% OFF up to ₹${cpn.maximum_discount}`
-                                : `₹${cpn.discount_value} OFF`
-                            }
-                            subtitle={`On orders above ₹${cpn.minimum_order_value} · ${cpn.description}`}
-                            activeCode={appliedCoupon?.code}
-                            onApply={(code) => {
-                              setCouponInput(code);
-                              validateAndApplyCoupon(code);
-                            }}
-                          />
-                        ))}
+                      {activeValidCoupons.map((cpn) => (
+                        <OfferCard
+                          key={cpn.id}
+                          code={cpn.code}
+                          title={
+                            cpn.discount_type === 'PERCENTAGE'
+                              ? `${cpn.discount_value}% OFF up to ₹${cpn.maximum_discount}`
+                              : `₹${cpn.discount_value} OFF`
+                          }
+                          subtitle={`On orders above ₹${cpn.minimum_order_value} · ${cpn.description}`}
+                          activeCode={appliedCoupon?.code}
+                          onApply={(code) => {
+                            setCouponInput(code);
+                            validateAndApplyCoupon(code);
+                          }}
+                        />
+                      ))}
                     </div>
                   </section>
                 )}
@@ -742,17 +767,26 @@ export const CustomerExperience: React.FC<{
                     <GlassCard className="p-12 text-center space-y-3">
                       <Compass className="w-8 h-8 text-stone-400 mx-auto" />
                       <h3 className="text-lg font-semibold text-stone-900 font-display">
-                        No kitchens match your current filter
+                        {restaurants.length === 0
+                          ? 'No partner kitchens are live yet'
+                          : 'No kitchens match your current filter'}
                       </h3>
-                      <GlassButton
-                        variant="secondary"
-                        onClick={() => {
-                          setSearchQuery('');
-                          setSelectedCategory('All');
-                        }}
-                      >
-                        Explore All Kitchens
-                      </GlassButton>
+                      <p className="text-xs text-stone-500 max-w-md mx-auto">
+                        {restaurants.length === 0
+                          ? 'Partner kitchens and menus appear here in real time as restaurant partners onboard and open their kitchens.'
+                          : 'Try clearing your search query or switching to a different category.'}
+                      </p>
+                      {(searchQuery || selectedCategory !== 'All') && (
+                        <GlassButton
+                          variant="secondary"
+                          onClick={() => {
+                            setSearchQuery('');
+                            setSelectedCategory('All');
+                          }}
+                        >
+                          Explore All Kitchens
+                        </GlassButton>
+                      )}
                     </GlassCard>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -781,66 +815,79 @@ export const CustomerExperience: React.FC<{
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {coupons
-                    .filter((c) => c.active)
-                    .map((cpn) => {
-                      const isExpired =
-                        new Date(cpn.expiry_date).getTime() < Date.now();
-                      const isApplied =
-                        appliedCoupon?.code.toUpperCase() ===
-                        cpn.code.toUpperCase();
-                      return (
-                        <GlassCard
-                          key={cpn.id}
-                          className="p-6 flex flex-col justify-between gap-4"
-                        >
-                          <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-xs text-stone-500">
-                              <span className="font-mono font-bold text-emerald-900 text-sm">
-                                {cpn.code}
-                              </span>
-                              <span>
-                                {isExpired
-                                  ? 'Expired'
-                                  : `Valid until ${cpn.expiry_date}`}
-                              </span>
+                {coupons.filter((c) => c.active).length === 0 ? (
+                  <GlassCard className="p-12 text-center space-y-3">
+                    <Tag className="w-8 h-8 text-stone-400 mx-auto" />
+                    <h3 className="text-lg font-semibold text-stone-900 font-display">
+                      No active coupons right now
+                    </h3>
+                    <p className="text-xs text-stone-500 max-w-sm mx-auto">
+                      Promotional offers created by restaurant partners will
+                      appear here automatically.
+                    </p>
+                  </GlassCard>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {coupons
+                      .filter((c) => c.active)
+                      .map((cpn) => {
+                        const isExpired =
+                          new Date(cpn.expiry_date).getTime() < Date.now();
+                        const isApplied =
+                          appliedCoupon?.code.toUpperCase() ===
+                          cpn.code.toUpperCase();
+                        return (
+                          <GlassCard
+                            key={cpn.id}
+                            className="p-6 flex flex-col justify-between gap-4"
+                          >
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between text-xs text-stone-500">
+                                <span className="font-mono font-bold text-emerald-900 text-sm">
+                                  {cpn.code}
+                                </span>
+                                <span>
+                                  {isExpired
+                                    ? 'Expired'
+                                    : `Valid until ${cpn.expiry_date}`}
+                                </span>
+                              </div>
+                              <h3 className="text-xl font-bold text-stone-900 font-display">
+                                {cpn.discount_type === 'PERCENTAGE'
+                                  ? `${cpn.discount_value}% OFF (Maximum discount ₹${cpn.maximum_discount})`
+                                  : `₹${cpn.discount_value} OFF`}
+                              </h3>
+                              <p className="text-xs text-stone-600">
+                                On orders above ₹{cpn.minimum_order_value} ·{' '}
+                                {cpn.description}
+                              </p>
                             </div>
-                            <h3 className="text-xl font-bold text-stone-900 font-display">
-                              {cpn.discount_type === 'PERCENTAGE'
-                                ? `${cpn.discount_value}% OFF (Maximum discount ₹${cpn.maximum_discount})`
-                                : `₹${cpn.discount_value} OFF`}
-                            </h3>
-                            <p className="text-xs text-stone-600">
-                              On orders above ₹{cpn.minimum_order_value} ·{' '}
-                              {cpn.description}
-                            </p>
-                          </div>
 
-                          <div className="pt-3 border-t border-stone-200/60 flex items-center justify-between">
-                            <span className="text-xs text-stone-500">
-                              Min order ₹{cpn.minimum_order_value}
-                            </span>
-                            <GlassButton
-                              variant={isApplied ? 'primary' : 'secondary'}
-                              disabled={isExpired}
-                              onClick={() => {
-                                setCouponInput(cpn.code);
-                                validateAndApplyCoupon(cpn.code);
-                                setActiveTab('cart');
-                              }}
-                            >
-                              {isApplied
-                                ? '✓ Applied'
-                                : isExpired
-                                ? 'Expired'
-                                : 'APPLY'}
-                            </GlassButton>
-                          </div>
-                        </GlassCard>
-                      );
-                    })}
-                </div>
+                            <div className="pt-3 border-t border-stone-200/60 flex items-center justify-between">
+                              <span className="text-xs text-stone-500">
+                                Min order ₹{cpn.minimum_order_value}
+                              </span>
+                              <GlassButton
+                                variant={isApplied ? 'primary' : 'secondary'}
+                                disabled={isExpired}
+                                onClick={() => {
+                                  setCouponInput(cpn.code);
+                                  validateAndApplyCoupon(cpn.code);
+                                  setActiveTab('cart');
+                                }}
+                              >
+                                {isApplied
+                                  ? '✓ Applied'
+                                  : isExpired
+                                  ? 'Expired'
+                                  : 'APPLY'}
+                              </GlassButton>
+                            </div>
+                          </GlassCard>
+                        );
+                      })}
+                  </div>
+                )}
               </section>
             )}
 

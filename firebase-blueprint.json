@@ -36,6 +36,19 @@
           "minLength": 1,
           "maxLength": 150
         },
+        "lat": {
+          "type": "number",
+          "description": "Latitude coordinate"
+        },
+        "lng": {
+          "type": "number",
+          "description": "Longitude coordinate"
+        },
+        "place_id": {
+          "type": "string",
+          "description": "Location Place ID",
+          "maxLength": 128
+        },
         "role": {
           "type": "string",
           "enum": ["customer", "restaurant_partner", "delivery_partner"],
@@ -64,6 +77,46 @@
           "description": "Associated restaurant document ID for Restaurant Partners",
           "maxLength": 128
         },
+        "total_rides": {
+          "type": "number",
+          "description": "Total courier rides count"
+        },
+        "orders_delivered": {
+          "type": "number",
+          "description": "Completed courier deliveries count"
+        },
+        "cancelled_deliveries": {
+          "type": "number",
+          "description": "Cancelled courier deliveries count"
+        },
+        "points": {
+          "type": "number",
+          "description": "Courier loyalty points"
+        },
+        "courier_rating": {
+          "type": "number",
+          "description": "Average courier rating"
+        },
+        "acceptance_rate": {
+          "type": "number",
+          "description": "Courier acceptance rate percentage"
+        },
+        "current_streak_days": {
+          "type": "number",
+          "description": "Courier active streak in days"
+        },
+        "total_earnings": {
+          "type": "number",
+          "description": "Courier total earnings"
+        },
+        "current_lat": {
+          "type": "number",
+          "description": "Courier live latitude"
+        },
+        "current_lng": {
+          "type": "number",
+          "description": "Courier live longitude"
+        },
         "created_at": {
           "type": "string",
           "format": "date-time",
@@ -79,7 +132,7 @@
     },
     "Restaurant": {
       "title": "Restaurant",
-      "description": "Restaurant storefront managed by a Restaurant Partner or seeded catalog.",
+      "description": "Restaurant storefront managed by a Restaurant Partner.",
       "type": "object",
       "properties": {
         "owner_uid": {
@@ -113,6 +166,14 @@
           "minLength": 1,
           "maxLength": 150
         },
+        "lat": {
+          "type": "number",
+          "description": "Restaurant latitude"
+        },
+        "lng": {
+          "type": "number",
+          "description": "Restaurant longitude"
+        },
         "cuisine": {
           "type": "string",
           "description": "Primary cuisine specialty",
@@ -131,19 +192,19 @@
         },
         "delivery_time": {
           "type": "string",
-          "description": "Estimated delivery window (e.g., 25-30 min)",
+          "description": "Estimated delivery window",
           "minLength": 1,
           "maxLength": 40
         },
         "distance": {
           "type": "string",
-          "description": "Approximate distance (e.g., 2.4 km)",
+          "description": "Approximate distance",
           "minLength": 1,
           "maxLength": 30
         },
         "price_indicator": {
           "type": "string",
-          "description": "Price tier indicator (e.g., $$, $$$)",
+          "description": "Price tier indicator",
           "minLength": 1,
           "maxLength": 10
         },
@@ -154,13 +215,13 @@
         },
         "image_url": {
           "type": "string",
-          "description": "Hero photograph URL or local asset path",
+          "description": "Hero photograph URL",
           "minLength": 1,
           "maxLength": 500
         },
         "is_open": {
           "type": "boolean",
-          "description": "Whether the restaurant is currently accepting orders"
+          "description": "Kitchen OPEN/CLOSED status"
         },
         "created_at": {
           "type": "string",
@@ -175,6 +236,47 @@
       },
       "required": ["owner_uid", "name", "owner_name", "contact_phone", "location", "cuisine", "operating_hours", "rating", "delivery_time", "distance", "price_indicator", "offer_text", "image_url", "is_open", "created_at", "updated_at"]
     },
+    "RestaurantCategory": {
+      "title": "RestaurantCategory",
+      "description": "Custom food category created by a Restaurant Partner.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "restaurant_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "owner_uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "display_order": {
+          "type": "number"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["restaurant_id", "owner_uid", "name", "display_order", "active", "created_at", "updated_at"]
+    },
     "MenuItem": {
       "title": "MenuItem",
       "description": "Individual culinary dish belonging to a Restaurant.",
@@ -182,227 +284,316 @@
       "properties": {
         "restaurant_id": {
           "type": "string",
-          "description": "Parent restaurant document ID",
           "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
+          "maxLength": 128
         },
         "owner_uid": {
           "type": "string",
-          "description": "UID of the Restaurant Partner who owns this item",
           "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
+          "maxLength": 128
+        },
+        "category_id": {
+          "type": "string",
+          "maxLength": 128
         },
         "name": {
           "type": "string",
-          "description": "Dish title",
           "minLength": 1,
           "maxLength": 120
         },
         "description": {
           "type": "string",
-          "description": "Short culinary description and key ingredients",
           "minLength": 1,
           "maxLength": 300
         },
         "price": {
-          "type": "number",
-          "description": "Unit price in USD"
+          "type": "number"
         },
         "category": {
           "type": "string",
-          "enum": ["Starters", "Main Course", "Beverages", "Desserts"],
-          "description": "Menu section category"
+          "minLength": 1,
+          "maxLength": 60
         },
         "image_url": {
           "type": "string",
-          "description": "Dish photograph URL or asset path",
           "minLength": 1,
           "maxLength": 500
         },
         "is_available": {
-          "type": "boolean",
-          "description": "In-stock availability toggle"
+          "type": "boolean"
         },
         "created_at": {
           "type": "string",
-          "format": "date-time",
-          "description": "Creation server timestamp"
+          "format": "date-time"
         },
         "updated_at": {
           "type": "string",
-          "format": "date-time",
-          "description": "Update server timestamp"
+          "format": "date-time"
         }
       },
       "required": ["restaurant_id", "owner_uid", "name", "description", "price", "category", "image_url", "is_available", "created_at", "updated_at"]
     },
+    "Coupon": {
+      "title": "Coupon",
+      "description": "Promotional discount coupon managed by a Restaurant Partner.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "code": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 30
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "discount_type": {
+          "type": "string",
+          "enum": ["PERCENTAGE", "FLAT"]
+        },
+        "discount_value": {
+          "type": "number"
+        },
+        "maximum_discount": {
+          "type": "number"
+        },
+        "minimum_order_value": {
+          "type": "number"
+        },
+        "start_date": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "expiry_date": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "usage_limit": {
+          "type": "number"
+        },
+        "used_count": {
+          "type": "number"
+        },
+        "per_user_limit": {
+          "type": "number"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "restaurant_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "owner_uid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["code", "description", "discount_type", "discount_value", "maximum_discount", "minimum_order_value", "start_date", "expiry_date", "usage_limit", "used_count", "per_user_limit", "active", "restaurant_id", "owner_uid", "created_at", "updated_at"]
+    },
     "Order": {
       "title": "Order",
-      "description": "Customer food delivery order with live status timeline.",
+      "description": "Customer food delivery order with live status timeline and courier coordinates.",
       "type": "object",
       "properties": {
         "customer_uid": {
           "type": "string",
-          "description": "UID of ordering customer",
           "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
+          "maxLength": 128
         },
         "customer_name": {
           "type": "string",
-          "description": "Customer display name",
           "minLength": 1,
           "maxLength": 100
         },
         "delivery_address": {
           "type": "string",
-          "description": "Customer delivery destination",
           "minLength": 1,
           "maxLength": 200
         },
+        "delivery_lat": {
+          "type": "number"
+        },
+        "delivery_lng": {
+          "type": "number"
+        },
         "restaurant_id": {
           "type": "string",
-          "description": "ID of restaurant preparing the order",
           "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
+          "maxLength": 128
         },
         "restaurant_owner_uid": {
           "type": "string",
-          "description": "UID of the restaurant partner",
           "minLength": 1,
           "maxLength": 128
         },
         "restaurant_name": {
           "type": "string",
-          "description": "Restaurant name",
           "minLength": 1,
           "maxLength": 120
         },
         "restaurant_location": {
           "type": "string",
-          "description": "Restaurant pickup address",
           "minLength": 1,
           "maxLength": 150
         },
+        "restaurant_lat": {
+          "type": "number"
+        },
+        "restaurant_lng": {
+          "type": "number"
+        },
         "delivery_partner_uid": {
           "type": "string",
-          "description": "UID of assigned delivery partner (or empty string if unassigned)",
           "maxLength": 128
         },
         "delivery_partner_name": {
           "type": "string",
-          "description": "Name of assigned delivery partner",
           "maxLength": 100
+        },
+        "delivery_partner_rating": {
+          "type": "number"
+        },
+        "courier_lat": {
+          "type": "number"
+        },
+        "courier_lng": {
+          "type": "number"
         },
         "items_summary": {
           "type": "string",
-          "description": "Formatted summary of ordered items and quantities",
           "minLength": 1,
           "maxLength": 500
         },
         "item_count": {
-          "type": "number",
-          "description": "Total quantity of items in order"
+          "type": "number"
         },
         "subtotal": {
-          "type": "number",
-          "description": "Items subtotal amount"
+          "type": "number"
         },
         "delivery_fee": {
-          "type": "number",
-          "description": "Delivery fee amount"
+          "type": "number"
         },
         "discount": {
-          "type": "number",
-          "description": "Applied promotional discount amount"
+          "type": "number"
+        },
+        "coupon_code": {
+          "type": "string",
+          "maxLength": 30
         },
         "taxes": {
-          "type": "number",
-          "description": "Calculated taxes amount"
+          "type": "number"
         },
         "total": {
-          "type": "number",
-          "description": "Final order total amount"
+          "type": "number"
         },
         "status": {
           "type": "string",
-          "enum": ["ORDER_PLACED", "RESTAURANT_ACCEPTED", "FOOD_PREPARING", "READY_FOR_PICKUP", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"],
-          "description": "Live order workflow state"
+          "enum": [
+            "ORDER_PLACED",
+            "RESTAURANT_ACCEPTED",
+            "FOOD_PREPARING",
+            "READY_FOR_PICKUP",
+            "COURIER_ACCEPTED",
+            "GOING_TO_RESTAURANT",
+            "ARRIVED_AT_RESTAURANT",
+            "OUT_FOR_DELIVERY",
+            "ARRIVED_AT_CUSTOMER",
+            "DELIVERED",
+            "CANCELLED"
+          ]
         },
         "estimated_arrival": {
           "type": "string",
-          "description": "Estimated arrival time window",
           "minLength": 1,
           "maxLength": 50
         },
         "distance_km": {
-          "type": "number",
-          "description": "Trip distance in kilometers"
+          "type": "number"
+        },
+        "accepted_at": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "arrived_at_restaurant_at": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "picked_up_at": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "arrived_at_customer_at": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "delivered_at": {
+          "type": "string",
+          "maxLength": 60
         },
         "created_at": {
           "type": "string",
-          "format": "date-time",
-          "description": "Order placement server timestamp"
+          "format": "date-time"
         },
         "updated_at": {
           "type": "string",
-          "format": "date-time",
-          "description": "Order status update server timestamp"
+          "format": "date-time"
         }
       },
       "required": ["customer_uid", "customer_name", "delivery_address", "restaurant_id", "restaurant_owner_uid", "restaurant_name", "restaurant_location", "delivery_partner_uid", "delivery_partner_name", "items_summary", "item_count", "subtotal", "delivery_fee", "discount", "taxes", "total", "status", "estimated_arrival", "distance_km", "created_at", "updated_at"]
     },
     "SupportTicket": {
       "title": "SupportTicket",
-      "description": "Customer help desk ticket for order or platform assistance.",
+      "description": "Customer help desk ticket.",
       "type": "object",
       "properties": {
         "user_uid": {
           "type": "string",
-          "description": "UID of the customer submitting the ticket",
           "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
+          "maxLength": 128
         },
         "category": {
           "type": "string",
-          "enum": ["Order issue", "Missing item", "Late delivery", "Refund/payment issue", "Restaurant issue", "Delivery partner issue", "General support"],
-          "description": "Support topic category"
+          "enum": ["Order issue", "Missing item", "Late delivery", "Refund/payment issue", "Restaurant issue", "Delivery partner issue", "General support"]
         },
         "order_id": {
           "type": "string",
-          "description": "Optional associated order ID",
           "maxLength": 128
         },
         "subject": {
           "type": "string",
-          "description": "Brief summary of the issue",
           "minLength": 1,
           "maxLength": 120
         },
         "message": {
           "type": "string",
-          "description": "Detailed description from the customer",
           "minLength": 1,
           "maxLength": 800
         },
         "status": {
           "type": "string",
-          "enum": ["OPEN", "IN_PROGRESS", "RESOLVED"],
-          "description": "Ticket resolution status"
+          "enum": ["OPEN", "IN_PROGRESS", "RESOLVED"]
         },
         "created_at": {
           "type": "string",
-          "format": "date-time",
-          "description": "Ticket creation server timestamp"
+          "format": "date-time"
         },
         "updated_at": {
           "type": "string",
-          "format": "date-time",
-          "description": "Ticket update server timestamp"
+          "format": "date-time"
         }
       },
       "required": ["user_uid", "category", "order_id", "subject", "message", "status", "created_at", "updated_at"]
@@ -415,19 +606,27 @@
     },
     "/restaurants/{restaurantId}": {
       "schema": { "$ref": "#/entities/Restaurant" },
-      "description": "Publicly discoverable restaurant storefronts managed by restaurant partners"
+      "description": "Restaurant storefronts managed by restaurant partners"
+    },
+    "/restaurant_categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/RestaurantCategory" },
+      "description": "Custom food categories managed by restaurant partners"
     },
     "/menu_items/{itemId}": {
       "schema": { "$ref": "#/entities/MenuItem" },
-      "description": "Publicly discoverable menu items managed by restaurant partners"
+      "description": "Menu dishes managed by restaurant partners"
+    },
+    "/coupons/{couponId}": {
+      "schema": { "$ref": "#/entities/Coupon" },
+      "description": "Promotional discount coupons managed by restaurant partners"
     },
     "/orders/{orderId}": {
       "schema": { "$ref": "#/entities/Order" },
-      "description": "Orders accessible to the ordering customer, restaurant partner, or delivery partner"
+      "description": "Orders shared across Customer, Restaurant, and Courier"
     },
     "/support_tickets/{ticketId}": {
       "schema": { "$ref": "#/entities/SupportTicket" },
-      "description": "Customer help desk support tickets"
+      "description": "Customer help desk tickets"
     }
   }
 }

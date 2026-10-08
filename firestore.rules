@@ -2,10 +2,17 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // =========================================================================
+    // 0. GLOBAL SAFETY NET (Default Deny Catch-All)
+    // =========================================================================
     match /{document=**} {
       allow read, write: if false;
     }
 
+    // =========================================================================
+    // 1. GLOBAL PRIMITIVES & SECURITY HELPERS
+    // =========================================================================
     function isSignedIn() {
       return request.auth != null;
     }
@@ -15,53 +22,708 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string &&
+             id.size() >= 1 &&
+             id.size() <= 128 &&
+             id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // =========================================================================
+    // 2. USERS COLLECTION (/users/{userId})
+    //    Stores Customer, Restaurant Partner, and Courier Profile + Statistics
+    // =========================================================================
+    function isValidUser(data) {
+      return data.keys().hasAll([
+               'google_uid',
+               'name',
+               'email',
+               'profile_image',
+               'location',
+               'role',
+               'created_at',
+               'updated_at'
+             ]) &&
+             data.keys().hasOnly([
+               'google_uid',
+               'name',
+               'email',
+               'profile_image',
+               'location',
+               'lat',
+               'lng',
+               'place_id',
+               'role',
+               'delivery_preferences',
+               'dietary_preferences',
+               'is_online',
+               'delivery_range_km',
+               'restaurant_id',
+               'total_rides',
+               'orders_delivered',
+               'cancelled_deliveries',
+               'points',
+               'courier_rating',
+               'acceptance_rate',
+               'current_streak_days',
+               'total_earnings',
+               'current_lat',
+               'current_lng',
+               'created_at',
+               'updated_at'
+             ]) &&
+             data.google_uid is string && data.google_uid.size() >= 1 && data.google_uid.size() <= 128 &&
+             data.google_uid == request.auth.uid &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 150 &&
+             data.profile_image is string && data.profile_image.size() <= 500 &&
+             data.location is string && data.location.size() >= 1 && data.location.size() <= 150 &&
+             (!('lat' in data) || (data.lat is number && data.lat >= -90 && data.lat <= 90)) &&
+             (!('lng' in data) || (data.lng is number && data.lng >= -180 && data.lng <= 180)) &&
+             (!('place_id' in data) || (data.place_id is string && data.place_id.size() <= 128)) &&
+             data.role is string && (
+               data.role == 'customer' ||
+               data.role == 'restaurant_partner' ||
+               data.role == 'delivery_partner'
+             ) &&
+             (!('delivery_preferences' in data) || (data.delivery_preferences is string && data.delivery_preferences.size() <= 200)) &&
+             (!('dietary_preferences' in data) || (data.dietary_preferences is string && data.dietary_preferences.size() <= 100)) &&
+             (!('is_online' in data) || data.is_online is bool) &&
+             (!('delivery_range_km' in data) || (data.delivery_range_km is number && data.delivery_range_km >= 1 && data.delivery_range_km <= 50)) &&
+             (!('restaurant_id' in data) || (data.restaurant_id is string && data.restaurant_id.size() <= 128)) &&
+             (!('total_rides' in data) || (data.total_rides is number && data.total_rides >= 0)) &&
+             (!('orders_delivered' in data) || (data.orders_delivered is number && data.orders_delivered >= 0)) &&
+             (!('cancelled_deliveries' in data) || (data.cancelled_deliveries is number && data.cancelled_deliveries >= 0)) &&
+             (!('points' in data) || (data.points is number && data.points >= 0)) &&
+             (!('courier_rating' in data) || (data.courier_rating is number && data.courier_rating >= 1 && data.courier_rating <= 5)) &&
+             (!('acceptance_rate' in data) || (data.acceptance_rate is number && data.acceptance_rate >= 0 && data.acceptance_rate <= 100)) &&
+             (!('current_streak_days' in data) || (data.current_streak_days is number && data.current_streak_days >= 0)) &&
+             (!('total_earnings' in data) || (data.total_earnings is number && data.total_earnings >= 0)) &&
+             (!('current_lat' in data) || (data.current_lat is number && data.current_lat >= -90 && data.current_lat <= 90)) &&
+             (!('current_lng' in data) || (data.current_lng is number && data.current_lng >= -180 && data.current_lng <= 180)) &&
+             data.created_at is timestamp &&
+             data.updated_at is timestamp;
     }
 
     match /users/{userId} {
+      // PII Isolation: Only the authenticated owner can read their own profile
       allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
       allow list: if isSignedIn() && resource.data.google_uid == request.auth.uid;
-      allow create, update: if isVerified() && isValidId(userId) && request.auth.uid == userId &&
-                            request.resource.data.google_uid == request.auth.uid;
+
+      allow create: if isVerified() &&
+                    isValidId(userId) &&
+                    request.auth.uid == userId &&
+                    isValidUser(incoming()) &&
+                    incoming().created_at == request.time &&
+                    incoming().updated_at == request.time;
+
+      allow update: if isVerified() &&
+                    isValidId(userId) &&
+                    request.auth.uid == userId &&
+                    isValidUser(incoming()) &&
+                    incoming().google_uid == existing().google_uid &&
+                    incoming().email == existing().email &&
+                    incoming().created_at == existing().created_at &&
+                    incoming().updated_at == request.time &&
+                    incoming().diff(existing()).affectedKeys().hasOnly([
+                      'name',
+                      'location',
+                      'lat',
+                      'lng',
+                      'place_id',
+                      'role',
+                      'profile_image',
+                      'delivery_preferences',
+                      'dietary_preferences',
+                      'is_online',
+                      'delivery_range_km',
+                      'restaurant_id',
+                      'total_rides',
+                      'orders_delivered',
+                      'cancelled_deliveries',
+                      'points',
+                      'courier_rating',
+                      'acceptance_rate',
+                      'current_streak_days',
+                      'total_earnings',
+                      'current_lat',
+                      'current_lng',
+                      'updated_at'
+                    ]);
+    }
+
+    // =========================================================================
+    // 3. RESTAURANTS COLLECTION (/restaurants/{restaurantId})
+    //    Includes Kitchen Status (is_open: true = 🟢 OPEN, false = 🔴 CLOSED)
+    // =========================================================================
+    function isValidRestaurant(data) {
+      return data.keys().hasAll([
+               'owner_uid',
+               'name',
+               'owner_name',
+               'contact_phone',
+               'location',
+               'cuisine',
+               'operating_hours',
+               'rating',
+               'delivery_time',
+               'distance',
+               'price_indicator',
+               'offer_text',
+               'image_url',
+               'is_open',
+               'created_at',
+               'updated_at'
+             ]) &&
+             data.keys().hasOnly([
+               'owner_uid',
+               'name',
+               'owner_name',
+               'contact_phone',
+               'location',
+               'lat',
+               'lng',
+               'cuisine',
+               'operating_hours',
+               'rating',
+               'delivery_time',
+               'distance',
+               'price_indicator',
+               'offer_text',
+               'image_url',
+               'is_open',
+               'created_at',
+               'updated_at'
+             ]) &&
+             data.owner_uid is string && data.owner_uid.size() >= 1 && data.owner_uid.size() <= 128 &&
+             data.owner_uid == request.auth.uid &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+             data.owner_name is string && data.owner_name.size() >= 1 && data.owner_name.size() <= 100 &&
+             data.contact_phone is string && data.contact_phone.size() >= 5 && data.contact_phone.size() <= 30 &&
+             data.location is string && data.location.size() >= 1 && data.location.size() <= 150 &&
+             (!('lat' in data) || (data.lat is number && data.lat >= -90 && data.lat <= 90)) &&
+             (!('lng' in data) || (data.lng is number && data.lng >= -180 && data.lng <= 180)) &&
+             data.cuisine is string && data.cuisine.size() >= 1 && data.cuisine.size() <= 80 &&
+             data.operating_hours is string && data.operating_hours.size() >= 1 && data.operating_hours.size() <= 80 &&
+             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+             data.delivery_time is string && data.delivery_time.size() >= 1 && data.delivery_time.size() <= 40 &&
+             data.distance is string && data.distance.size() >= 1 && data.distance.size() <= 30 &&
+             data.price_indicator is string && data.price_indicator.size() >= 1 && data.price_indicator.size() <= 10 &&
+             data.offer_text is string && data.offer_text.size() <= 100 &&
+             data.image_url is string && data.image_url.size() >= 1 && data.image_url.size() <= 500 &&
+             data.is_open is bool &&
+             data.created_at is timestamp &&
+             data.updated_at is timestamp;
     }
 
     match /restaurants/{restaurantId} {
-      allow get, list: if isSignedIn() && resource.data.name is string;
-      allow create, update: if isVerified() && isValidId(restaurantId) &&
-                            request.resource.data.owner_uid == request.auth.uid;
+      allow get: if isSignedIn() && isValidId(restaurantId) && resource.data.name is string;
+      allow list: if isSignedIn() && resource.data.name is string;
+
+      allow create: if isVerified() &&
+                    isValidId(restaurantId) &&
+                    isValidRestaurant(incoming()) &&
+                    incoming().created_at == request.time &&
+                    incoming().updated_at == request.time;
+
+      allow update: if isVerified() &&
+                    isValidId(restaurantId) &&
+                    isValidRestaurant(incoming()) &&
+                    existing().owner_uid == request.auth.uid &&
+                    incoming().owner_uid == existing().owner_uid &&
+                    incoming().created_at == existing().created_at &&
+                    incoming().updated_at == request.time &&
+                    incoming().diff(existing()).affectedKeys().hasOnly([
+                      'name',
+                      'owner_name',
+                      'contact_phone',
+                      'location',
+                      'lat',
+                      'lng',
+                      'cuisine',
+                      'operating_hours',
+                      'delivery_time',
+                      'price_indicator',
+                      'offer_text',
+                      'image_url',
+                      'is_open',
+                      'updated_at'
+                    ]);
+    }
+
+    // =========================================================================
+    // 4. CUSTOM RESTAURANT CATEGORIES (/restaurant_categories/{categoryId})
+    // =========================================================================
+    function isValidRestaurantCategory(data) {
+      return data.keys().hasAll([
+               'restaurant_id',
+               'owner_uid',
+               'name',
+               'display_order',
+               'active',
+               'created_at',
+               'updated_at'
+             ]) &&
+             data.keys().hasOnly([
+               'id',
+               'restaurant_id',
+               'owner_uid',
+               'name',
+               'display_order',
+               'active',
+               'created_at',
+               'updated_at'
+             ]) &&
+             (!('id' in data) || (data.id is string && data.id.size() <= 128)) &&
+             data.restaurant_id is string && data.restaurant_id.size() >= 1 && data.restaurant_id.size() <= 128 &&
+             data.owner_uid is string && data.owner_uid.size() >= 1 && data.owner_uid.size() <= 128 &&
+             data.owner_uid == request.auth.uid &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 60 &&
+             data.display_order is number && data.display_order >= 0 && data.display_order <= 1000 &&
+             data.active is bool &&
+             data.created_at is timestamp &&
+             data.updated_at is timestamp;
     }
 
     match /restaurant_categories/{categoryId} {
-      allow get, list: if isSignedIn() && resource.data.name is string;
-      allow create, update, delete: if isVerified() && isValidId(categoryId);
+      allow get: if isSignedIn() && isValidId(categoryId) && resource.data.name is string;
+      allow list: if isSignedIn() && resource.data.name is string;
+
+      allow create: if isVerified() &&
+                    isValidId(categoryId) &&
+                    isValidRestaurantCategory(incoming()) &&
+                    incoming().created_at == request.time &&
+                    incoming().updated_at == request.time;
+
+      allow update: if isVerified() &&
+                    isValidId(categoryId) &&
+                    isValidRestaurantCategory(incoming()) &&
+                    existing().owner_uid == request.auth.uid &&
+                    incoming().owner_uid == existing().owner_uid &&
+                    incoming().restaurant_id == existing().restaurant_id &&
+                    incoming().created_at == existing().created_at &&
+                    incoming().updated_at == request.time &&
+                    incoming().diff(existing()).affectedKeys().hasOnly([
+                      'name',
+                      'display_order',
+                      'active',
+                      'updated_at'
+                    ]);
+
+      allow delete: if isVerified() &&
+                    isValidId(categoryId) &&
+                    existing().owner_uid == request.auth.uid;
+    }
+
+    // =========================================================================
+    // 5. MENU ITEMS / DISHES (/menu_items/{itemId})
+    // =========================================================================
+    function isValidMenuItem(data) {
+      return data.keys().hasAll([
+               'restaurant_id',
+               'owner_uid',
+               'name',
+               'description',
+               'price',
+               'category',
+               'image_url',
+               'is_available',
+               'created_at',
+               'updated_at'
+             ]) &&
+             data.keys().hasOnly([
+               'restaurant_id',
+               'owner_uid',
+               'category_id',
+               'name',
+               'description',
+               'price',
+               'category',
+               'image_url',
+               'is_available',
+               'created_at',
+               'updated_at'
+             ]) &&
+             data.restaurant_id is string && data.restaurant_id.size() >= 1 && data.restaurant_id.size() <= 128 &&
+             data.owner_uid is string && data.owner_uid.size() >= 1 && data.owner_uid.size() <= 128 &&
+             data.owner_uid == request.auth.uid &&
+             (!('category_id' in data) || (data.category_id is string && data.category_id.size() <= 128)) &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+             data.description is string && data.description.size() >= 1 && data.description.size() <= 300 &&
+             data.price is number && data.price >= 0.5 && data.price <= 50000 &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 60 &&
+             data.image_url is string && data.image_url.size() >= 1 && data.image_url.size() <= 500 &&
+             data.is_available is bool &&
+             data.created_at is timestamp &&
+             data.updated_at is timestamp;
     }
 
     match /menu_items/{itemId} {
-      allow get, list: if isSignedIn() && resource.data.name is string;
-      allow create, update: if isVerified() && isValidId(itemId) &&
-                            request.resource.data.owner_uid == request.auth.uid;
-      allow delete: if isVerified() && isValidId(itemId) &&
-                    resource.data.owner_uid == request.auth.uid;
+      allow get: if isSignedIn() && isValidId(itemId) && resource.data.name is string;
+      allow list: if isSignedIn() && resource.data.name is string;
+
+      allow create: if isVerified() &&
+                    isValidId(itemId) &&
+                    isValidMenuItem(incoming()) &&
+                    incoming().created_at == request.time &&
+                    incoming().updated_at == request.time;
+
+      allow update: if isVerified() &&
+                    isValidId(itemId) &&
+                    isValidMenuItem(incoming()) &&
+                    existing().owner_uid == request.auth.uid &&
+                    incoming().owner_uid == existing().owner_uid &&
+                    incoming().restaurant_id == existing().restaurant_id &&
+                    incoming().created_at == existing().created_at &&
+                    incoming().updated_at == request.time &&
+                    incoming().diff(existing()).affectedKeys().hasOnly([
+                      'name',
+                      'description',
+                      'price',
+                      'category',
+                      'category_id',
+                      'image_url',
+                      'is_available',
+                      'updated_at'
+                    ]);
+
+      allow delete: if isVerified() &&
+                    isValidId(itemId) &&
+                    existing().owner_uid == request.auth.uid;
+    }
+
+    // =========================================================================
+    // 6. COUPONS / OFFERS (/coupons/{couponId})
+    // =========================================================================
+    function isValidCoupon(data) {
+      return data.keys().hasAll([
+               'code',
+               'description',
+               'discount_type',
+               'discount_value',
+               'maximum_discount',
+               'minimum_order_value',
+               'start_date',
+               'expiry_date',
+               'usage_limit',
+               'used_count',
+               'per_user_limit',
+               'active',
+               'restaurant_id',
+               'owner_uid',
+               'created_at',
+               'updated_at'
+             ]) &&
+             data.keys().hasOnly([
+               'id',
+               'code',
+               'description',
+               'discount_type',
+               'discount_value',
+               'maximum_discount',
+               'minimum_order_value',
+               'start_date',
+               'expiry_date',
+               'usage_limit',
+               'used_count',
+               'per_user_limit',
+               'active',
+               'restaurant_id',
+               'owner_uid',
+               'created_at',
+               'updated_at'
+             ]) &&
+             (!('id' in data) || (data.id is string && data.id.size() <= 128)) &&
+             data.code is string && data.code.size() >= 2 && data.code.size() <= 30 &&
+             data.description is string && data.description.size() >= 1 && data.description.size() <= 200 &&
+             data.discount_type is string && (data.discount_type == 'PERCENTAGE' || data.discount_type == 'FLAT') &&
+             data.discount_value is number && data.discount_value > 0 && data.discount_value <= 10000 &&
+             data.maximum_discount is number && data.maximum_discount >= 0 && data.maximum_discount <= 50000 &&
+             data.minimum_order_value is number && data.minimum_order_value >= 0 && data.minimum_order_value <= 100000 &&
+             data.start_date is string && data.start_date.size() >= 4 && data.start_date.size() <= 30 &&
+             data.expiry_date is string && data.expiry_date.size() >= 4 && data.expiry_date.size() <= 30 &&
+             data.usage_limit is number && data.usage_limit >= 1 &&
+             data.used_count is number && data.used_count >= 0 &&
+             data.per_user_limit is number && data.per_user_limit >= 1 &&
+             data.active is bool &&
+             data.restaurant_id is string && data.restaurant_id.size() >= 1 && data.restaurant_id.size() <= 128 &&
+             data.owner_uid is string && data.owner_uid.size() >= 1 && data.owner_uid.size() <= 128 &&
+             data.owner_uid == request.auth.uid &&
+             data.created_at is timestamp &&
+             data.updated_at is timestamp;
     }
 
     match /coupons/{couponId} {
-      allow get, list: if isSignedIn() && resource.data.code is string;
-      allow create, update, delete: if isVerified() && isValidId(couponId);
+      allow get: if isSignedIn() && isValidId(couponId) && resource.data.code is string;
+      allow list: if isSignedIn() && resource.data.code is string;
+
+      allow create: if isVerified() &&
+                    isValidId(couponId) &&
+                    isValidCoupon(incoming()) &&
+                    incoming().created_at == request.time &&
+                    incoming().updated_at == request.time;
+
+      allow update: if isVerified() &&
+                    isValidId(couponId) &&
+                    isValidCoupon(incoming()) &&
+                    existing().owner_uid == request.auth.uid &&
+                    incoming().owner_uid == existing().owner_uid &&
+                    incoming().created_at == existing().created_at &&
+                    incoming().updated_at == request.time &&
+                    incoming().diff(existing()).affectedKeys().hasOnly([
+                      'code',
+                      'description',
+                      'discount_type',
+                      'discount_value',
+                      'maximum_discount',
+                      'minimum_order_value',
+                      'expiry_date',
+                      'active',
+                      'used_count',
+                      'updated_at'
+                    ]);
+
+      allow delete: if isVerified() &&
+                    isValidId(couponId) &&
+                    existing().owner_uid == request.auth.uid;
+    }
+
+    // =========================================================================
+    // 7. ORDERS COLLECTION (/orders/{orderId})
+    //    Shared Real-Time Lifecycle: Customer + Restaurant + Courier
+    // =========================================================================
+    function isValidOrder(data) {
+      return data.keys().hasAll([
+               'customer_uid',
+               'customer_name',
+               'delivery_address',
+               'restaurant_id',
+               'restaurant_owner_uid',
+               'restaurant_name',
+               'restaurant_location',
+               'delivery_partner_uid',
+               'delivery_partner_name',
+               'items_summary',
+               'item_count',
+               'subtotal',
+               'delivery_fee',
+               'discount',
+               'taxes',
+               'total',
+               'status',
+               'estimated_arrival',
+               'distance_km',
+               'created_at',
+               'updated_at'
+             ]) &&
+             data.keys().hasOnly([
+               'customer_uid',
+               'customer_name',
+               'delivery_address',
+               'delivery_lat',
+               'delivery_lng',
+               'restaurant_id',
+               'restaurant_owner_uid',
+               'restaurant_name',
+               'restaurant_location',
+               'restaurant_lat',
+               'restaurant_lng',
+               'delivery_partner_uid',
+               'delivery_partner_name',
+               'delivery_partner_rating',
+               'courier_lat',
+               'courier_lng',
+               'items_summary',
+               'item_count',
+               'subtotal',
+               'delivery_fee',
+               'discount',
+               'coupon_code',
+               'taxes',
+               'total',
+               'status',
+               'estimated_arrival',
+               'distance_km',
+               'accepted_at',
+               'arrived_at_restaurant_at',
+               'picked_up_at',
+               'arrived_at_customer_at',
+               'delivered_at',
+               'created_at',
+               'updated_at'
+             ]) &&
+             data.customer_uid is string && data.customer_uid.size() >= 1 && data.customer_uid.size() <= 128 &&
+             data.customer_name is string && data.customer_name.size() >= 1 && data.customer_name.size() <= 100 &&
+             data.delivery_address is string && data.delivery_address.size() >= 1 && data.delivery_address.size() <= 200 &&
+             (!('delivery_lat' in data) || (data.delivery_lat is number && data.delivery_lat >= -90 && data.delivery_lat <= 90)) &&
+             (!('delivery_lng' in data) || (data.delivery_lng is number && data.delivery_lng >= -180 && data.delivery_lng <= 180)) &&
+             data.restaurant_id is string && data.restaurant_id.size() >= 1 && data.restaurant_id.size() <= 128 &&
+             data.restaurant_owner_uid is string && data.restaurant_owner_uid.size() >= 1 && data.restaurant_owner_uid.size() <= 128 &&
+             data.restaurant_name is string && data.restaurant_name.size() >= 1 && data.restaurant_name.size() <= 120 &&
+             data.restaurant_location is string && data.restaurant_location.size() >= 1 && data.restaurant_location.size() <= 150 &&
+             (!('restaurant_lat' in data) || (data.restaurant_lat is number && data.restaurant_lat >= -90 && data.restaurant_lat <= 90)) &&
+             (!('restaurant_lng' in data) || (data.restaurant_lng is number && data.restaurant_lng >= -180 && data.restaurant_lng <= 180)) &&
+             data.delivery_partner_uid is string && data.delivery_partner_uid.size() <= 128 &&
+             data.delivery_partner_name is string && data.delivery_partner_name.size() <= 100 &&
+             (!('delivery_partner_rating' in data) || (data.delivery_partner_rating is number && data.delivery_partner_rating >= 1 && data.delivery_partner_rating <= 5)) &&
+             (!('courier_lat' in data) || (data.courier_lat is number && data.courier_lat >= -90 && data.courier_lat <= 90)) &&
+             (!('courier_lng' in data) || (data.courier_lng is number && data.courier_lng >= -180 && data.courier_lng <= 180)) &&
+             data.items_summary is string && data.items_summary.size() >= 1 && data.items_summary.size() <= 500 &&
+             data.item_count is number && data.item_count >= 1 && data.item_count <= 200 &&
+             data.subtotal is number && data.subtotal >= 0 &&
+             data.delivery_fee is number && data.delivery_fee >= 0 &&
+             data.discount is number && data.discount >= 0 &&
+             (!('coupon_code' in data) || (data.coupon_code is string && data.coupon_code.size() <= 30)) &&
+             data.taxes is number && data.taxes >= 0 &&
+             data.total is number && data.total >= 0 &&
+             data.status is string && (
+               data.status == 'ORDER_PLACED' ||
+               data.status == 'RESTAURANT_ACCEPTED' ||
+               data.status == 'FOOD_PREPARING' ||
+               data.status == 'READY_FOR_PICKUP' ||
+               data.status == 'COURIER_ACCEPTED' ||
+               data.status == 'GOING_TO_RESTAURANT' ||
+               data.status == 'ARRIVED_AT_RESTAURANT' ||
+               data.status == 'OUT_FOR_DELIVERY' ||
+               data.status == 'ARRIVED_AT_CUSTOMER' ||
+               data.status == 'DELIVERED' ||
+               data.status == 'CANCELLED'
+             ) &&
+             data.estimated_arrival is string && data.estimated_arrival.size() >= 1 && data.estimated_arrival.size() <= 50 &&
+             data.distance_km is number && data.distance_km >= 0.1 && data.distance_km <= 100 &&
+             (!('accepted_at' in data) || (data.accepted_at is string && data.accepted_at.size() <= 60)) &&
+             (!('arrived_at_restaurant_at' in data) || (data.arrived_at_restaurant_at is string && data.arrived_at_restaurant_at.size() <= 60)) &&
+             (!('picked_up_at' in data) || (data.picked_up_at is string && data.picked_up_at.size() <= 60)) &&
+             (!('arrived_at_customer_at' in data) || (data.arrived_at_customer_at is string && data.arrived_at_customer_at.size() <= 60)) &&
+             (!('delivered_at' in data) || (data.delivered_at is string && data.delivered_at.size() <= 60)) &&
+             data.created_at is timestamp &&
+             data.updated_at is timestamp;
     }
 
     match /orders/{orderId} {
-      allow get, list: if isSignedIn() && resource.data.customer_uid is string;
-      allow create: if isVerified() && isValidId(orderId) &&
-                    request.resource.data.customer_uid == request.auth.uid;
-      allow update: if isVerified() && isValidId(orderId) &&
-                    resource.data.status != 'DELIVERED' &&
-                    resource.data.status != 'CANCELLED';
+      allow get: if isSignedIn() && isValidId(orderId) && resource.data.customer_uid is string;
+      allow list: if isSignedIn() && resource.data.customer_uid is string;
+
+      allow create: if isVerified() &&
+                    isValidId(orderId) &&
+                    isValidOrder(incoming()) &&
+                    incoming().customer_uid == request.auth.uid &&
+                    incoming().status == 'ORDER_PLACED' &&
+                    incoming().created_at == request.time &&
+                    incoming().updated_at == request.time;
+
+      // Terminal State Locking: Prevents updates once DELIVERED or CANCELLED
+      allow update: if isVerified() &&
+                    isValidId(orderId) &&
+                    isValidOrder(incoming()) &&
+                    existing().status != 'DELIVERED' &&
+                    existing().status != 'CANCELLED' &&
+                    incoming().customer_uid == existing().customer_uid &&
+                    incoming().restaurant_id == existing().restaurant_id &&
+                    incoming().created_at == existing().created_at &&
+                    incoming().updated_at == request.time && (
+                      // Action 1: Restaurant updates kitchen preparation stage
+                      (incoming().diff(existing()).affectedKeys().hasOnly([
+                        'status',
+                        'estimated_arrival',
+                        'updated_at'
+                      ])) ||
+                      // Action 2: Delivery Partner accepts, navigates, updates live coordinates, or marks delivered
+                      (incoming().diff(existing()).affectedKeys().hasOnly([
+                        'status',
+                        'delivery_partner_uid',
+                        'delivery_partner_name',
+                        'delivery_partner_rating',
+                        'courier_lat',
+                        'courier_lng',
+                        'accepted_at',
+                        'arrived_at_restaurant_at',
+                        'picked_up_at',
+                        'arrived_at_customer_at',
+                        'delivered_at',
+                        'estimated_arrival',
+                        'updated_at'
+                      ]) && incoming().delivery_partner_uid == request.auth.uid)
+                    );
+    }
+
+    // =========================================================================
+    // 8. SUPPORT TICKETS (/support_tickets/{ticketId})
+    // =========================================================================
+    function isValidSupportTicket(data) {
+      return data.keys().hasAll([
+               'user_uid',
+               'category',
+               'order_id',
+               'subject',
+               'message',
+               'status',
+               'created_at',
+               'updated_at'
+             ]) &&
+             data.keys().hasOnly([
+               'user_uid',
+               'category',
+               'order_id',
+               'subject',
+               'message',
+               'status',
+               'created_at',
+               'updated_at'
+             ]) &&
+             data.user_uid is string && data.user_uid.size() >= 1 && data.user_uid.size() <= 128 &&
+             data.user_uid == request.auth.uid &&
+             data.category is string && (
+               data.category == 'Order issue' ||
+               data.category == 'Missing item' ||
+               data.category == 'Late delivery' ||
+               data.category == 'Refund/payment issue' ||
+               data.category == 'Restaurant issue' ||
+               data.category == 'Delivery partner issue' ||
+               data.category == 'General support'
+             ) &&
+             data.order_id is string && data.order_id.size() <= 128 &&
+             data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 120 &&
+             data.message is string && data.message.size() >= 1 && data.message.size() <= 800 &&
+             data.status is string && (
+               data.status == 'OPEN' ||
+               data.status == 'IN_PROGRESS' ||
+               data.status == 'RESOLVED'
+             ) &&
+             data.created_at is timestamp &&
+             data.updated_at is timestamp;
     }
 
     match /support_tickets/{ticketId} {
-      allow get, list: if isSignedIn() && resource.data.user_uid == request.auth.uid;
-      allow create, update: if isVerified() && isValidId(ticketId) &&
-                            request.resource.data.user_uid == request.auth.uid;
+      allow get: if isSignedIn() && isValidId(ticketId) && resource.data.user_uid == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.user_uid == request.auth.uid;
+
+      allow create: if isVerified() &&
+                    isValidId(ticketId) &&
+                    isValidSupportTicket(incoming()) &&
+                    incoming().status == 'OPEN' &&
+                    incoming().created_at == request.time &&
+                    incoming().updated_at == request.time;
+
+      allow update: if isVerified() &&
+                    isValidId(ticketId) &&
+                    isValidSupportTicket(incoming()) &&
+                    existing().user_uid == request.auth.uid &&
+                    incoming().user_uid == existing().user_uid &&
+                    incoming().created_at == existing().created_at &&
+                    incoming().updated_at == request.time &&
+                    incoming().diff(existing()).affectedKeys().hasOnly([
+                      'status',
+                      'message',
+                      'updated_at'
+                    ]);
     }
   }
 }
