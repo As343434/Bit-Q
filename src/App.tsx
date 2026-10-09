@@ -284,7 +284,7 @@ export default function App() {
           distance: '1.5 km',
           price_indicator: '₹₹',
           offer_text: 'Freshly crafted menu',
-          image_url: '',
+          image_url: '/favicon.svg',
           is_open: true,
           created_at: serverTimestamp(),
           updated_at: serverTimestamp(),
@@ -525,7 +525,7 @@ export default function App() {
             0,
             100
           ),
-          image_url: updates.image_url || '',
+          image_url: updates.image_url?.trim() || '/favicon.svg',
           is_open: updates.is_open ?? true,
           created_at: serverTimestamp(),
           updated_at: serverTimestamp(),
@@ -613,18 +613,67 @@ export default function App() {
       myRestaurant?.id ||
       userProfile.restaurant_id ||
       `rest-${firebaseUser.uid.slice(0, 12)}`;
+
+    // Ensure the partner's restaurant storefront document exists in Firestore
+    if (!myRestaurant) {
+      try {
+        await setDoc(doc(db, 'restaurants', restId), {
+          owner_uid: firebaseUser.uid,
+          name: `${userProfile.name}'s Kitchen`.slice(0, 120),
+          owner_name: userProfile.name.slice(0, 100),
+          contact_phone: '+91 98450 12345',
+          location: (userProfile.location || 'Indiranagar, Bengaluru').slice(
+            0,
+            150
+          ),
+          lat: userProfile.lat || 12.9784,
+          lng: userProfile.lng || 77.6408,
+          cuisine: 'Artisanal Kitchen',
+          operating_hours: '09:00 AM – 10:30 PM',
+          rating: 5.0,
+          delivery_time: '25–30 min',
+          distance: '1.5 km',
+          price_indicator: '₹₹',
+          offer_text: 'Freshly crafted menu',
+          image_url: '/favicon.svg',
+          is_open: true,
+          created_at: serverTimestamp(),
+          updated_at: serverTimestamp(),
+        });
+      } catch (restErr) {
+        console.warn('Auto-create restaurant warning:', restErr);
+      }
+    }
+
     const itemId = `item-${Date.now()}`;
+    const safeName = (itemData.name || 'Signature Dish').trim().slice(0, 120);
+    const safeDesc = (
+      itemData.description || `Freshly prepared ${safeName} from our kitchen.`
+    )
+      .trim()
+      .slice(0, 300);
+    const safeCategory = (itemData.category || 'Main Course')
+      .trim()
+      .slice(0, 60);
+    const safeImage = (itemData.image_url || '/favicon.svg')
+      .trim()
+      .slice(0, 500);
+    const safePrice = Math.min(
+      50000,
+      Math.max(1, Number(itemData.price) || 199)
+    );
+
     try {
       await setDoc(doc(db, 'menu_items', itemId), {
         restaurant_id: restId,
         owner_uid: firebaseUser.uid,
-        category_id: itemData.category_id || '',
-        name: itemData.name.slice(0, 120),
-        description: itemData.description.slice(0, 300),
-        price: itemData.price,
-        category: itemData.category,
-        image_url: itemData.image_url.slice(0, 500),
-        is_available: itemData.is_available,
+        category_id: (itemData.category_id || 'default').slice(0, 128),
+        name: safeName,
+        description: safeDesc,
+        price: safePrice,
+        category: safeCategory,
+        image_url: safeImage,
+        is_available: Boolean(itemData.is_available),
         created_at: serverTimestamp(),
         updated_at: serverTimestamp(),
       });

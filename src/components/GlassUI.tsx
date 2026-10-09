@@ -157,7 +157,7 @@ export const ResilientImage: React.FC<{
     setHasError(false);
   }, [src]);
 
-  if (hasError || !src || !src.trim()) {
+  if (hasError || !src || !src.trim() || src.trim() === '/favicon.svg') {
     return (
       <div
         className={`flex flex-col items-center justify-center bg-gradient-to-br from-rose-500/10 via-slate-50 to-blue-600/10 text-slate-600 p-4 text-center ${className}`}

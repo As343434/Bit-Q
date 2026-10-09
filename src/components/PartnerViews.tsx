@@ -120,11 +120,12 @@ export const RestaurantPartnerExperience: React.FC<{
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [itemName, setItemName] = useState('');
   const [itemDesc, setItemDesc] = useState('');
-  const [itemPrice, setItemPrice] = useState('');
+  const [itemPrice, setItemPrice] = useState('199');
   const [itemCategory, setItemCategory] = useState<string>('Main Course');
   const [itemImage, setItemImage] = useState('');
   const [itemAvailable, setItemAvailable] = useState(true);
   const [isSavingItem, setIsSavingItem] = useState(false);
+  const [itemModalError, setItemModalError] = useState<string | null>(null);
 
   // Inline Create Category inside Add Dish or Category Manager
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
@@ -220,11 +221,12 @@ export const RestaurantPartnerExperience: React.FC<{
     setEditingItem(null);
     setItemName('');
     setItemDesc('');
-    setItemPrice('');
+    setItemPrice('199');
     setItemCategory(selectableCategoryNames[0] || 'Main Course');
     setItemImage('');
     setItemAvailable(true);
     setIsCreatingCategory(false);
+    setItemModalError(null);
     setIsItemModalOpen(true);
   };
 
@@ -234,9 +236,10 @@ export const RestaurantPartnerExperience: React.FC<{
     setItemDesc(item.description);
     setItemPrice(item.price.toFixed(0));
     setItemCategory(item.category);
-    setItemImage(item.image_url);
+    setItemImage(item.image_url === '/favicon.svg' ? '' : item.image_url);
     setItemAvailable(item.is_available);
     setIsCreatingCategory(false);
+    setItemModalError(null);
     setIsItemModalOpen(true);
   };
 
@@ -267,32 +270,55 @@ export const RestaurantPartnerExperience: React.FC<{
 
   const handleSaveMenuItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    const parsedPrice = Math.max(10, Number(itemPrice) || 250);
+    setItemModalError(null);
+
+    const cleanName = itemName.trim();
+    if (!cleanName) {
+      setItemModalError('Please enter a Dish Name.');
+      return;
+    }
+
+    const numericPrice = Number(itemPrice);
+    const parsedPrice =
+      !Number.isNaN(numericPrice) && numericPrice >= 1 ? numericPrice : 199;
+    const cleanDesc =
+      itemDesc.trim() || `Freshly prepared ${cleanName} from our kitchen.`;
+    const cleanImage = itemImage.trim() || '/favicon.svg';
+    const cleanCategory =
+      (itemCategory && itemCategory.trim()) ||
+      selectableCategoryNames[0] ||
+      'Main Course';
+
     setIsSavingItem(true);
     try {
-      const matchedCat = myCategories.find((c) => c.name === itemCategory);
+      const matchedCat = myCategories.find((c) => c.name === cleanCategory);
       if (editingItem) {
         await onUpdateMenuItem(editingItem.id, {
-          name: itemName.trim(),
-          description: itemDesc.trim(),
+          name: cleanName,
+          description: cleanDesc,
           price: parsedPrice,
-          category: itemCategory,
-          category_id: matchedCat?.id || '',
-          image_url: itemImage.trim(),
+          category: cleanCategory,
+          category_id: matchedCat?.id || 'default',
+          image_url: cleanImage,
           is_available: itemAvailable,
         });
       } else {
         await onAddMenuItem({
-          name: itemName.trim(),
-          description: itemDesc.trim(),
+          name: cleanName,
+          description: cleanDesc,
           price: parsedPrice,
-          category: itemCategory,
-          category_id: matchedCat?.id || '',
-          image_url: itemImage.trim(),
+          category: cleanCategory,
+          category_id: matchedCat?.id || 'default',
+          image_url: cleanImage,
           is_available: itemAvailable,
         });
       }
       setIsItemModalOpen(false);
+    } catch (err) {
+      console.error('Failed to save dish:', err);
+      setItemModalError(
+        'Could not save dish to Firestore. Please check your connection or permissions and try again.'
+      );
     } finally {
       setIsSavingItem(false);
     }
@@ -1274,8 +1300,8 @@ export const RestaurantPartnerExperience: React.FC<{
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-stone-600">
-              Short Culinary Description
+            <label className="text-xs font-medium text-slate-600">
+              Short Culinary Description (Optional)
             </label>
             <textarea
               rows={2}
@@ -1283,10 +1309,16 @@ export const RestaurantPartnerExperience: React.FC<{
               onChange={(e) => setItemDesc(e.target.value)}
               placeholder="Describe key ingredients and preparation style..."
               maxLength={300}
-              required
-              className="w-full p-3.5 rounded-2xl bg-white/85 border border-stone-200/90 text-sm text-stone-900 focus:outline-none focus:border-emerald-800"
+              className="w-full p-3.5 rounded-2xl bg-white/85 border border-slate-200/90 text-sm text-slate-900 focus:outline-none focus:border-rose-600"
             />
           </div>
+
+          {itemModalError && (
+            <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 flex items-center gap-2 text-xs text-rose-900">
+              <AlertCircle className="w-4 h-4 text-rose-700 shrink-0" />
+              <span>{itemModalError}</span>
+            </div>
+          )}
 
           <div className="flex items-center justify-between pt-1">
             <span className="text-xs font-medium text-stone-700">
