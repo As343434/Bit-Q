@@ -7,6 +7,7 @@ import {
   GlassButton,
   GlassInput,
   LocationSelector,
+  TimeSlotDialPicker,
   BitQLogo,
   BitQIcon,
 } from './GlassUI';
@@ -214,7 +215,7 @@ export const OnboardingScreen: React.FC<{
   isSubmitting,
   error,
 }) => {
-  const [role, setRole] = useState<UserRole>(initialRole);
+  const role: UserRole = initialRole;
   const [name, setName] = useState(
     firebaseUser.displayName || firebaseUser.email?.split('@')[0] || ''
   );
@@ -222,13 +223,15 @@ export const OnboardingScreen: React.FC<{
     POPULAR_LOCATIONS_DATA[0]
   );
   const [dietaryPreferences, setDietaryPreferences] = useState('');
-  const [deliveryPreferences, setDeliveryPreferences] = useState('');
+  const [deliveryPreferences, setDeliveryPreferences] = useState(
+    '09:00 AM – 10:30 PM'
+  );
 
   // Restaurant Partner onboarding fields
   const [restaurantName, setRestaurantName] = useState('');
   const [cuisine, setCuisine] = useState('');
   const [contactPhone, setContactPhone] = useState('');
-  const [operatingHours, setOperatingHours] = useState('');
+  const [operatingHours, setOperatingHours] = useState('09:00 AM – 10:30 PM');
 
   // Delivery Partner onboarding fields
   const [deliveryRangeKm, setDeliveryRangeKm] = useState(5);
@@ -259,10 +262,18 @@ export const OnboardingScreen: React.FC<{
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-rose-600">
-              Almost there · Let&apos;s personalize your experience
+              {role === 'restaurant_partner'
+                ? 'BiteQ Restaurant Partner Onboarding'
+                : role === 'delivery_partner'
+                ? 'BiteQ Delivery Partner Onboarding'
+                : 'Almost there · Let’s personalize your BiteQ account'}
             </p>
             <h1 className="text-2xl font-bold text-slate-900 font-display mt-1">
-              Create your account
+              {role === 'restaurant_partner'
+                ? 'Register your restaurant'
+                : role === 'delivery_partner'
+                ? 'Create courier profile'
+                : 'Create your account'}
             </h1>
           </div>
           {firebaseUser.photoURL ? (
@@ -277,35 +288,6 @@ export const OnboardingScreen: React.FC<{
               {(name || 'B').charAt(0).toUpperCase()}
             </div>
           )}
-        </div>
-
-        {/* Account Role Selector */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium text-stone-600">
-            Account Experience
-          </label>
-          <div className="w-full grid grid-cols-3 gap-2 p-1.5 rounded-2xl bg-stone-200/70">
-            {(
-              [
-                { id: 'customer', label: 'Customer' },
-                { id: 'restaurant_partner', label: 'Restaurant' },
-                { id: 'delivery_partner', label: 'Courier' },
-              ] as { id: UserRole; label: string }[]
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setRole(tab.id)}
-                className={`w-full h-11 px-3 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
-                  role === tab.id
-                    ? 'bg-white text-stone-900 shadow-sm'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
         </div>
 
         {error && (
@@ -355,7 +337,7 @@ export const OnboardingScreen: React.FC<{
           </div>
 
           {role === 'customer' && (
-            <div className="pt-2 space-y-4 border-t border-stone-200/60">
+            <div className="pt-2 space-y-4 border-t border-slate-200/60">
               <GlassInput
                 label="Dietary Preferences (Optional)"
                 value={dietaryPreferences}
@@ -363,12 +345,19 @@ export const OnboardingScreen: React.FC<{
                 placeholder="e.g., Vegetarian, Nut-free, High-protein"
                 maxLength={100}
               />
+              <TimeSlotDialPicker
+                label="Preferred Delivery Time Slot (Clock Dial)"
+                value={deliveryPreferences}
+                onChange={setDeliveryPreferences}
+                startLabel="From Time"
+                endLabel="To Time"
+              />
             </div>
           )}
 
           {role === 'restaurant_partner' && (
-            <div className="pt-3 space-y-4 border-t border-stone-200/60">
-              <p className="text-xs font-semibold text-emerald-950">
+            <div className="pt-3 space-y-4 border-t border-slate-200/60">
+              <p className="text-xs font-semibold text-slate-900">
                 Restaurant Partner Details
               </p>
               <GlassInput
@@ -387,29 +376,26 @@ export const OnboardingScreen: React.FC<{
                 maxLength={80}
                 required
               />
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <GlassInput
-                  label="Business Contact"
-                  value={contactPhone}
-                  onChange={setContactPhone}
-                  placeholder="+91 98450 00000"
-                  maxLength={30}
-                  required
-                />
-                <GlassInput
-                  label="Operating Hours"
-                  value={operatingHours}
-                  onChange={setOperatingHours}
-                  placeholder="11:00 AM – 11:00 PM"
-                  maxLength={80}
-                  required
-                />
-              </div>
+              <GlassInput
+                label="Business Contact"
+                value={contactPhone}
+                onChange={setContactPhone}
+                placeholder="+91 98450 00000"
+                maxLength={30}
+                required
+              />
+              <TimeSlotDialPicker
+                label="Operating Time Slot (Clock Dial)"
+                value={operatingHours}
+                onChange={setOperatingHours}
+                startLabel="Opens At"
+                endLabel="Closes At"
+              />
             </div>
           )}
 
           {role === 'delivery_partner' && (
-            <div className="pt-3 space-y-3 border-t border-slate-200/60">
+            <div className="pt-3 space-y-4 border-t border-slate-200/60">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-medium text-slate-600">
                   Preferred Delivery Service Range
@@ -426,10 +412,13 @@ export const OnboardingScreen: React.FC<{
                 onChange={(e) => setDeliveryRangeKm(Number(e.target.value))}
                 className="w-full accent-rose-600"
               />
-              <p className="text-xs text-stone-500">
-                You can adjust your active range and Online/Offline availability
-                anytime from your courier console.
-              </p>
+              <TimeSlotDialPicker
+                label="Preferred Shift Time Slot (Clock Dial)"
+                value={deliveryPreferences}
+                onChange={setDeliveryPreferences}
+                startLabel="Shift Starts"
+                endLabel="Shift Ends"
+              />
             </div>
           )}
 

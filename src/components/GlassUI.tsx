@@ -299,6 +299,372 @@ export const GlassInput: React.FC<{
   );
 };
 
+/* 4B. TimeSlotDialPicker — Interactive Circular Clock Dial for Time Slot Selection */
+interface ParsedTimeEndpoint {
+  hour: number;
+  minute: number;
+  period: 'AM' | 'PM';
+}
+
+function parseSlotString(raw: string): {
+  start: ParsedTimeEndpoint;
+  end: ParsedTimeEndpoint;
+} {
+  const fallback = {
+    start: { hour: 9, minute: 0, period: 'AM' as const },
+    end: { hour: 10, minute: 30, period: 'PM' as const },
+  };
+  if (!raw || !raw.trim()) return fallback;
+  const parts = raw.split(/[–-]/).map((s) => s.trim());
+  if (parts.length < 2) return fallback;
+
+  const parseOne = (
+    str: string,
+    def: ParsedTimeEndpoint
+  ): ParsedTimeEndpoint => {
+    const m = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (!m) return def;
+    const h = Math.max(1, Math.min(12, parseInt(m[1], 10) || def.hour));
+    const min = Math.max(0, Math.min(55, parseInt(m[2], 10) || 0));
+    const per = m[3].toUpperCase() === 'PM' ? 'PM' : 'AM';
+    return { hour: h, minute: min, period: per };
+  };
+
+  return {
+    start: parseOne(parts[0], fallback.start),
+    end: parseOne(parts[1], fallback.end),
+  };
+}
+
+function formatEndpoint(t: ParsedTimeEndpoint): string {
+  const hh = String(t.hour).padStart(2, '0');
+  const mm = String(t.minute).padStart(2, '0');
+  return `${hh}:${mm} ${t.period}`;
+}
+
+export const TimeSlotDialPicker: React.FC<{
+  label?: string;
+  value: string;
+  onChange: (formattedSlot: string) => void;
+  startLabel?: string;
+  endLabel?: string;
+}> = ({
+  label = 'Operating Time Slot',
+  value,
+  onChange,
+  startLabel = 'Opens At',
+  endLabel = 'Closes At',
+}) => {
+  const parsed = parseSlotString(value);
+  const [start, setStart] = useState<ParsedTimeEndpoint>(parsed.start);
+  const [end, setEnd] = useState<ParsedTimeEndpoint>(parsed.end);
+  const [activeTarget, setActiveTarget] = useState<'start' | 'end'>('start');
+  const [dialMode, setDialMode] = useState<'hour' | 'minute'>('hour');
+  const [isDialExpanded, setIsDialExpanded] = useState(false);
+
+  // Ensure parent has a valid formatted time slot string on initial mount if empty
+  useEffect(() => {
+    if (!value || !value.trim()) {
+      onChange(`${formatEndpoint(start)} – ${formatEndpoint(end)}`);
+    }
+  }, []);
+
+  // Sync internal state if external value changes
+  useEffect(() => {
+    if (value && value.trim()) {
+      const next = parseSlotString(value);
+      setStart(next.start);
+      setEnd(next.end);
+    }
+  }, [value]);
+
+  const currentEndpoint = activeTarget === 'start' ? start : end;
+
+  const commitSlot = (
+    nextStart: ParsedTimeEndpoint,
+    nextEnd: ParsedTimeEndpoint
+  ) => {
+    setStart(nextStart);
+    setEnd(nextEnd);
+    onChange(`${formatEndpoint(nextStart)} – ${formatEndpoint(nextEnd)}`);
+  };
+
+  const updateCurrentEndpoint = (patch: Partial<ParsedTimeEndpoint>) => {
+    if (activeTarget === 'start') {
+      const updated = { ...start, ...patch };
+      commitSlot(updated, end);
+    } else {
+      const updated = { ...end, ...patch };
+      commitSlot(start, updated);
+    }
+  };
+
+  // 12 radial positions around the clock face (index 0 = 12 o'clock top)
+  const hourNumbers = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+  const minuteNumbers = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+
+  const activeIndex =
+    dialMode === 'hour'
+      ? currentEndpoint.hour % 12
+      : Math.round(currentEndpoint.minute / 5) % 12;
+
+  const activeAngleDeg = activeIndex * 30; // 0 deg at 12 o'clock
+  const activeAngleRad = ((activeAngleDeg - 90) * Math.PI) / 180;
+  const radius = 78;
+  const center = 108;
+  const handX = center + radius * Math.cos(activeAngleRad);
+  const handY = center + radius * Math.sin(activeAngleRad);
+
+  const handleClockSurfacePointer = (
+    e: React.MouseEvent<HTMLDivElement>
+  ) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
+    const dx = e.clientX - rect.left - cx;
+    const dy = e.clientY - rect.top - cy;
+    let deg = (Math.atan2(dy, dx) * 180) / Math.PI + 90;
+    if (deg < 0) deg += 360;
+    const sector = Math.round(deg / 30) % 12;
+
+    if (dialMode === 'hour') {
+      const pickedHour = sector === 0 ? 12 : sector;
+      updateCurrentEndpoint({ hour: pickedHour });
+      setDialMode('minute');
+    } else {
+      const pickedMinute = sector * 5;
+      updateCurrentEndpoint({ minute: pickedMinute });
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-slate-600">{label}</label>
+        <button
+          type="button"
+          onClick={() => setIsDialExpanded(!isDialExpanded)}
+          className="text-xs font-semibold text-rose-600 hover:text-blue-600 transition-colors inline-flex items-center gap-1"
+        >
+          <Clock className="w-3.5 h-3.5" />
+          <span>{isDialExpanded ? 'Hide Clock Dial' : 'Open Clock Dial'}</span>
+        </button>
+      </div>
+
+      {/* Summary Slot Trigger Bar */}
+      <div className="grid grid-cols-2 gap-2.5">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTarget('start');
+            setDialMode('hour');
+            setIsDialExpanded(true);
+          }}
+          className={`p-3 rounded-2xl border text-left transition-all flex items-center justify-between ${
+            isDialExpanded && activeTarget === 'start'
+              ? 'bg-white border-rose-600 ring-2 ring-rose-500/15 shadow-sm'
+              : 'bg-white/85 border-slate-200/90 hover:bg-white'
+          }`}
+        >
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              {startLabel}
+            </p>
+            <p className="text-sm font-mono font-bold text-slate-900 mt-0.5 tabular-nums">
+              {formatEndpoint(start)}
+            </p>
+          </div>
+          <Clock className="w-4 h-4 text-rose-600 shrink-0" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTarget('end');
+            setDialMode('hour');
+            setIsDialExpanded(true);
+          }}
+          className={`p-3 rounded-2xl border text-left transition-all flex items-center justify-between ${
+            isDialExpanded && activeTarget === 'end'
+              ? 'bg-white border-blue-600 ring-2 ring-blue-500/15 shadow-sm'
+              : 'bg-white/85 border-slate-200/90 hover:bg-white'
+          }`}
+        >
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              {endLabel}
+            </p>
+            <p className="text-sm font-mono font-bold text-slate-900 mt-0.5 tabular-nums">
+              {formatEndpoint(end)}
+            </p>
+          </div>
+          <Clock className="w-4 h-4 text-blue-600 shrink-0" />
+        </button>
+      </div>
+
+      {/* Interactive Circular Clock Dial Panel */}
+      {isDialExpanded && (
+        <div className="p-4 rounded-3xl glass-surface border border-slate-200/80 space-y-4 animate-fadeIn">
+          {/* Dial Controls Header: Hour : Minute + AM/PM Switcher */}
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200/60">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-slate-500 mr-1">
+                {activeTarget === 'start' ? startLabel : endLabel}:
+              </span>
+              <button
+                type="button"
+                onClick={() => setDialMode('hour')}
+                className={`px-2.5 py-1 rounded-xl font-mono text-sm font-bold transition-colors ${
+                  dialMode === 'hour'
+                    ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white'
+                    : 'bg-slate-200/70 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {String(currentEndpoint.hour).padStart(2, '0')}
+              </button>
+              <span className="font-mono font-bold text-slate-400">:</span>
+              <button
+                type="button"
+                onClick={() => setDialMode('minute')}
+                className={`px-2.5 py-1 rounded-xl font-mono text-sm font-bold transition-colors ${
+                  dialMode === 'minute'
+                    ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white'
+                    : 'bg-slate-200/70 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {String(currentEndpoint.minute).padStart(2, '0')}
+              </button>
+            </div>
+
+            <div className="inline-flex p-1 rounded-xl bg-slate-200/70 gap-1">
+              {(['AM', 'PM'] as const).map((per) => (
+                <button
+                  key={per}
+                  type="button"
+                  onClick={() => updateCurrentEndpoint({ period: per })}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                    currentEndpoint.period === per
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {per}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 360-Degree Circular Clock Face */}
+          <div className="flex flex-col items-center justify-center py-1">
+            <div
+              onClick={handleClockSurfacePointer}
+              className="relative w-[216px] h-[216px] rounded-full bg-gradient-to-br from-rose-500/5 via-white to-blue-600/5 border border-slate-200/90 shadow-inner cursor-pointer select-none"
+            >
+              {/* SVG Rotating Clock Hand & Center Hub */}
+              <svg
+                viewBox="0 0 216 216"
+                className="absolute inset-0 w-full h-full pointer-events-none"
+              >
+                <defs>
+                  <linearGradient
+                    id="clockDialGrad"
+                    x1="0%"
+                    y1="0%"
+                    x2="100%"
+                    y2="100%"
+                  >
+                    <stop offset="0%" stopColor="#E11D48" />
+                    <stop offset="100%" stopColor="#2563EB" />
+                  </linearGradient>
+                </defs>
+                <line
+                  x1={center}
+                  y1={center}
+                  x2={handX}
+                  y2={handY}
+                  stroke="url(#clockDialGrad)"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                />
+                <circle
+                  cx={center}
+                  cy={center}
+                  r="5"
+                  fill="url(#clockDialGrad)"
+                />
+                <circle
+                  cx={handX}
+                  cy={handY}
+                  r="16"
+                  fill="url(#clockDialGrad)"
+                  fillOpacity="0.15"
+                />
+              </svg>
+
+              {/* 12 Radial Hour / Minute Numbers */}
+              {(dialMode === 'hour' ? hourNumbers : minuteNumbers).map(
+                (num, idx) => {
+                  const angleRad = ((idx * 30 - 90) * Math.PI) / 180;
+                  const nx = center + radius * Math.cos(angleRad);
+                  const ny = center + radius * Math.sin(angleRad);
+                  const isSelected = idx === activeIndex;
+
+                  return (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (dialMode === 'hour') {
+                          updateCurrentEndpoint({ hour: num });
+                          setDialMode('minute');
+                        } else {
+                          updateCurrentEndpoint({ minute: num });
+                        }
+                      }}
+                      style={{
+                        left: `${nx - 18}px`,
+                        top: `${ny - 18}px`,
+                      }}
+                      className={`absolute w-9 h-9 rounded-full font-mono text-xs font-bold flex items-center justify-center transition-all ${
+                        isSelected
+                          ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white shadow-md scale-105'
+                          : 'text-slate-700 hover:bg-slate-200/60'
+                      }`}
+                    >
+                      {dialMode === 'minute'
+                        ? String(num).padStart(2, '0')
+                        : num}
+                    </button>
+                  );
+                }
+              )}
+            </div>
+            <p className="text-[11px] text-slate-500 mt-2">
+              Tap {dialMode === 'hour' ? 'an hour' : 'minutes'} on the dial to
+              set {activeTarget === 'start' ? startLabel.toLowerCase() : endLabel.toLowerCase()}
+            </p>
+          </div>
+
+          {/* Done Button */}
+          <div className="flex items-center justify-between pt-2 border-t border-slate-200/60">
+            <span className="text-xs font-mono font-semibold text-slate-700">
+              Slot: {formatEndpoint(start)} – {formatEndpoint(end)}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsDialExpanded(false)}
+              className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-blue-600 text-white text-xs font-semibold shadow-sm"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* 5. GlassModal */
 export const GlassModal: React.FC<{
   isOpen: boolean;

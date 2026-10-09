@@ -34,6 +34,7 @@ import {
   StatusToggle,
   ProfileCard,
   ResilientImage,
+  TimeSlotDialPicker,
   BitQLogo,
 } from './GlassUI';
 import { InteractiveRouteMap } from './InteractiveMap';
@@ -1143,22 +1144,20 @@ export const RestaurantPartnerExperience: React.FC<{
                   maxLength={100}
                   required
                 />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <GlassInput
-                    label="Business Phone"
-                    value={restPhone}
-                    onChange={setRestPhone}
-                    maxLength={30}
-                    required
-                  />
-                  <GlassInput
-                    label="Operating Hours"
-                    value={restHours}
-                    onChange={setRestHours}
-                    maxLength={80}
-                    required
-                  />
-                </div>
+                <GlassInput
+                  label="Business Phone"
+                  value={restPhone}
+                  onChange={setRestPhone}
+                  maxLength={30}
+                  required
+                />
+                <TimeSlotDialPicker
+                  label="Operating Time Slot (Clock Dial)"
+                  value={restHours}
+                  onChange={setRestHours}
+                  startLabel="Opens At"
+                  endLabel="Closes At"
+                />
                 <GlassButton
                   type="submit"
                   variant="primary"

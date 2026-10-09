@@ -130,6 +130,7 @@ service cloud.firestore {
                     isValidUser(incoming()) &&
                     incoming().google_uid == existing().google_uid &&
                     incoming().email == existing().email &&
+                    incoming().role == existing().role &&
                     incoming().created_at == existing().created_at &&
                     incoming().updated_at == request.time &&
                     incoming().diff(existing()).affectedKeys().hasOnly([
@@ -138,7 +139,6 @@ service cloud.firestore {
                       'lat',
                       'lng',
                       'place_id',
-                      'role',
                       'profile_image',
                       'delivery_preferences',
                       'dietary_preferences',
@@ -629,8 +629,9 @@ service cloud.firestore {
                     incoming().restaurant_id == existing().restaurant_id &&
                     incoming().created_at == existing().created_at &&
                     incoming().updated_at == request.time && (
-                      // Action 1: Restaurant updates kitchen preparation stage
-                      (incoming().diff(existing()).affectedKeys().hasOnly([
+                      // Action 1: Restaurant Owner updates kitchen preparation stage
+                      (existing().restaurant_owner_uid == request.auth.uid &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
                         'status',
                         'estimated_arrival',
                         'updated_at'

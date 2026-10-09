@@ -30,6 +30,7 @@ import {
   GlassButton,
   GlassInput,
   LocationSelector,
+  TimeSlotDialPicker,
   SearchBar,
   CategoryCard,
   OfferCard,
@@ -1352,12 +1353,12 @@ export const CustomerExperience: React.FC<{
                       placeholder="e.g., Vegetarian, Gluten-free"
                       maxLength={100}
                     />
-                    <GlassInput
-                      label="Delivery Drop-off Instructions"
+                    <TimeSlotDialPicker
+                      label="Preferred Delivery Time Slot (Clock Dial)"
                       value={editDeliveryNote}
                       onChange={setEditDeliveryNote}
-                      placeholder="e.g., Leave with building concierge"
-                      maxLength={200}
+                      startLabel="From Time"
+                      endLabel="To Time"
                     />
                     <div className="pt-2">
                       <GlassButton
