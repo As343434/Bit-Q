@@ -26,7 +26,6 @@ import {
   Order,
   OrderStatus,
 } from '../types';
-import { IMAGES } from '../seedData';
 import {
   GlassCard,
   GlassButton,
@@ -35,6 +34,7 @@ import {
   StatusToggle,
   ProfileCard,
   ResilientImage,
+  BitQLogo,
 } from './GlassUI';
 import { InteractiveRouteMap } from './InteractiveMap';
 
@@ -119,9 +119,9 @@ export const RestaurantPartnerExperience: React.FC<{
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [itemName, setItemName] = useState('');
   const [itemDesc, setItemDesc] = useState('');
-  const [itemPrice, setItemPrice] = useState('450');
-  const [itemCategory, setItemCategory] = useState<string>('Pizza');
-  const [itemImage, setItemImage] = useState(IMAGES.pizza);
+  const [itemPrice, setItemPrice] = useState('');
+  const [itemCategory, setItemCategory] = useState<string>('Main Course');
+  const [itemImage, setItemImage] = useState('');
   const [itemAvailable, setItemAvailable] = useState(true);
   const [isSavingItem, setIsSavingItem] = useState(false);
 
@@ -219,9 +219,9 @@ export const RestaurantPartnerExperience: React.FC<{
     setEditingItem(null);
     setItemName('');
     setItemDesc('');
-    setItemPrice('450');
-    setItemCategory(selectableCategoryNames[0] || 'Pizza');
-    setItemImage(IMAGES.pizza);
+    setItemPrice('');
+    setItemCategory(selectableCategoryNames[0] || 'Main Course');
+    setItemImage('');
     setItemAvailable(true);
     setIsCreatingCategory(false);
     setIsItemModalOpen(true);
@@ -277,7 +277,7 @@ export const RestaurantPartnerExperience: React.FC<{
           price: parsedPrice,
           category: itemCategory,
           category_id: matchedCat?.id || '',
-          image_url: itemImage.trim() || IMAGES.pizza,
+          image_url: itemImage.trim(),
           is_available: itemAvailable,
         });
       } else {
@@ -287,7 +287,7 @@ export const RestaurantPartnerExperience: React.FC<{
           price: parsedPrice,
           category: itemCategory,
           category_id: matchedCat?.id || '',
-          image_url: itemImage.trim() || IMAGES.pizza,
+          image_url: itemImage.trim(),
           is_available: itemAvailable,
         });
       }
@@ -339,19 +339,19 @@ export const RestaurantPartnerExperience: React.FC<{
   const isKitchenOpen = restaurant?.is_open ?? true;
 
   return (
-    <div className="min-h-screen bg-[#F7F6F2] pb-24 md:pb-16">
+    <div className="min-h-screen pb-24 md:pb-16">
       {/* Strict 3-Zone Top Bar Contract */}
-      <header className="sticky top-0 z-30 glass-surface border-b border-stone-200/60 px-6 py-3.5">
+      <header className="sticky top-0 z-30 glass-surface border-b border-slate-200/60 px-6 py-3">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <button
             type="button"
             onClick={() => setActiveTab('dashboard')}
-            className="text-xl font-bold tracking-tight text-stone-900 font-display whitespace-nowrap"
+            className="inline-flex items-center gap-2 whitespace-nowrap"
           >
-            Bit&apos;Q (e=&apos;)
+            <BitQLogo size="sm" />
           </button>
 
-          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-stone-600">
+          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600">
             {(
               [
                 { id: 'dashboard', label: 'Overview' },
@@ -367,8 +367,8 @@ export const RestaurantPartnerExperience: React.FC<{
                 onClick={() => setActiveTab(nav.id)}
                 className={`py-1 transition-colors whitespace-nowrap ${
                   activeTab === nav.id
-                    ? 'text-stone-900 font-semibold underline underline-offset-8 decoration-emerald-800 decoration-2'
-                    : 'hover:text-stone-900'
+                    ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-rose-600 decoration-2'
+                    : 'hover:text-slate-900'
                 }`}
               >
                 {nav.label}
@@ -392,7 +392,7 @@ export const RestaurantPartnerExperience: React.FC<{
       </header>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 glass-elevated border-t border-stone-200/80 grid grid-cols-5 items-center h-16 px-2">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 glass-elevated border-t border-slate-200/80 grid grid-cols-5 items-center h-16 px-2">
         {(
           [
             { id: 'dashboard', label: 'Overview' },
@@ -408,8 +408,8 @@ export const RestaurantPartnerExperience: React.FC<{
             onClick={() => setActiveTab(item.id)}
             className={`min-h-[48px] flex flex-col items-center justify-center rounded-xl text-xs ${
               activeTab === item.id
-                ? 'text-emerald-900 font-semibold'
-                : 'text-stone-500'
+                ? 'text-rose-600 font-semibold'
+                : 'text-slate-500'
             }`}
           >
             {item.label}
@@ -1249,43 +1249,27 @@ export const RestaurantPartnerExperience: React.FC<{
           {/* Dish Image URL Input + Live Image Preview */}
           <div className="space-y-2">
             <GlassInput
-              label="Dish Image URL"
+              label="Dish Image URL (Optional)"
               value={itemImage}
               onChange={setItemImage}
               placeholder="https://..."
-              helperText="Paste any valid image URL or choose a studio preset below"
-              required
+              helperText="Paste a direct image link for your dish or leave blank for the BiteQ emblem"
             />
-            <div className="flex items-center gap-4 p-3 rounded-2xl bg-stone-100/80 border border-stone-200/70">
-              <div className="w-20 h-20 rounded-xl overflow-hidden bg-white shrink-0 border border-stone-200">
+            <div className="flex items-center gap-4 p-3 rounded-2xl bg-slate-100/80 border border-slate-200/70">
+              <div className="w-20 h-20 rounded-xl overflow-hidden bg-white shrink-0 border border-slate-200">
                 <ResilientImage
                   src={itemImage}
                   alt={itemName || 'Dish Preview'}
                   className="w-full h-full object-cover"
                 />
               </div>
-              <div className="space-y-1.5 flex-1">
-                <p className="text-xs font-semibold text-stone-700">
-                  Live Image Preview (object-fit: cover)
+              <div className="space-y-1 flex-1">
+                <p className="text-xs font-semibold text-slate-700">
+                  Live Dish Card Preview
                 </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    { label: 'Pizza', url: IMAGES.pizza },
-                    { label: 'Burger', url: IMAGES.burger },
-                    { label: 'Biryani', url: IMAGES.biryani },
-                    { label: 'Bowl', url: IMAGES.healthy },
-                    { label: 'Dessert', url: IMAGES.dessert },
-                  ].map((preset) => (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      onClick={() => setItemImage(preset.url)}
-                      className="px-2.5 py-1 rounded-lg bg-white border border-stone-200 text-[11px] font-medium text-stone-700 hover:border-emerald-800"
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
+                <p className="text-[11px] text-slate-500">
+                  If no image URL is provided, BiteQ displays a clean branded culinary card.
+                </p>
               </div>
             </div>
           </div>
@@ -1544,19 +1528,19 @@ export const DeliveryPartnerExperience: React.FC<{
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F6F2] pb-24 md:pb-16">
+    <div className="min-h-screen pb-24 md:pb-16">
       {/* Strict 3-Zone Top Bar Contract */}
-      <header className="sticky top-0 z-30 glass-surface border-b border-stone-200/60 px-6 py-3.5">
+      <header className="sticky top-0 z-30 glass-surface border-b border-slate-200/60 px-6 py-3">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <button
             type="button"
             onClick={() => setActiveTab('dashboard')}
-            className="text-xl font-bold tracking-tight text-stone-900 font-display whitespace-nowrap"
+            className="inline-flex items-center gap-2 whitespace-nowrap"
           >
-            Bit&apos;Q (e=&apos;)
+            <BitQLogo size="sm" />
           </button>
 
-          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-stone-600">
+          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600">
             {(
               [
                 { id: 'dashboard', label: 'Dispatch Radar' },
@@ -1571,8 +1555,8 @@ export const DeliveryPartnerExperience: React.FC<{
                 onClick={() => setActiveTab(nav.id)}
                 className={`py-1 transition-colors whitespace-nowrap ${
                   activeTab === nav.id
-                    ? 'text-stone-900 font-semibold underline underline-offset-8 decoration-emerald-800 decoration-2'
-                    : 'hover:text-stone-900'
+                    ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-rose-600 decoration-2'
+                    : 'hover:text-slate-900'
                 }`}
               >
                 {nav.label}
@@ -1594,7 +1578,7 @@ export const DeliveryPartnerExperience: React.FC<{
       </header>
 
       {/* Mobile Bottom Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 glass-elevated border-t border-stone-200/80 grid grid-cols-4 items-center h-16 px-2">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 glass-elevated border-t border-slate-200/80 grid grid-cols-4 items-center h-16 px-2">
         {(
           [
             { id: 'dashboard', label: 'Radar' },
@@ -1609,8 +1593,8 @@ export const DeliveryPartnerExperience: React.FC<{
             onClick={() => setActiveTab(item.id)}
             className={`min-h-[48px] flex flex-col items-center justify-center rounded-xl text-xs ${
               activeTab === item.id
-                ? 'text-emerald-900 font-semibold'
-                : 'text-stone-500'
+                ? 'text-rose-600 font-semibold'
+                : 'text-slate-500'
             }`}
           >
             {item.label}
@@ -1654,10 +1638,10 @@ export const DeliveryPartnerExperience: React.FC<{
                       key={km}
                       type="button"
                       onClick={() => onUpdateRange(km)}
-                      className={`flex-1 min-h-[40px] rounded-xl text-xs font-mono font-semibold transition-colors tabular-nums ${
+                      className={`flex-1 min-h-[40px] rounded-xl text-xs font-mono font-semibold transition-all tabular-nums ${
                         rangeKm === km
-                          ? 'bg-emerald-900 text-white'
-                          : 'bg-white/80 text-stone-700 hover:bg-white'
+                          ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white shadow-sm'
+                          : 'bg-white/80 text-slate-700 hover:bg-white'
                       }`}
                     >
                       {km} km

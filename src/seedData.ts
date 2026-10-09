@@ -5,19 +5,6 @@ import {
   RestaurantCategory,
   GeoLocationData,
 } from './types';
-import pizzaImg from './assets/images/hero_artisan_pizza_1791435438606.jpg';
-import burgerImg from './assets/images/food_smash_burger_1791435451024.jpg';
-import biryaniImg from './assets/images/food_biryani_bowl_1791435463858.jpg';
-import bowlImg from './assets/images/food_matcha_bowl_1791435474280.jpg';
-import dessertImg from './assets/images/food_tiramisu_dessert_1791435489076.jpg';
-
-export const IMAGES = {
-  pizza: pizzaImg,
-  burger: burgerImg,
-  biryani: biryaniImg,
-  healthy: bowlImg,
-  dessert: dessertImg,
-};
 
 // Default real geographic hubs for quick initial selection alongside live Nominatim search
 export const POPULAR_LOCATIONS_DATA: GeoLocationData[] = [

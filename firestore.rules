@@ -217,7 +217,7 @@ service cloud.firestore {
              data.distance is string && data.distance.size() >= 1 && data.distance.size() <= 30 &&
              data.price_indicator is string && data.price_indicator.size() >= 1 && data.price_indicator.size() <= 10 &&
              data.offer_text is string && data.offer_text.size() <= 100 &&
-             data.image_url is string && data.image_url.size() >= 1 && data.image_url.size() <= 500 &&
+             data.image_url is string && data.image_url.size() <= 500 &&
              data.is_open is bool &&
              data.created_at is timestamp &&
              data.updated_at is timestamp;
@@ -359,7 +359,7 @@ service cloud.firestore {
              data.description is string && data.description.size() >= 1 && data.description.size() <= 300 &&
              data.price is number && data.price >= 0.5 && data.price <= 50000 &&
              data.category is string && data.category.size() >= 1 && data.category.size() <= 60 &&
-             data.image_url is string && data.image_url.size() >= 1 && data.image_url.size() <= 500 &&
+             data.image_url is string && data.image_url.size() <= 500 &&
              data.is_available is bool &&
              data.created_at is timestamp &&
              data.updated_at is timestamp;

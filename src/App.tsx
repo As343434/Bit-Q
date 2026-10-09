@@ -43,7 +43,7 @@ import {
   SupportCategory,
   GeoLocationData,
 } from './types';
-import { IMAGES } from './seedData';
+import { BitQIcon, BitQLogo } from './components/GlassUI';
 import { LoginScreen, OnboardingScreen } from './components/AuthViews';
 import { CustomerExperience } from './components/CustomerViews';
 import {
@@ -284,7 +284,7 @@ export default function App() {
           distance: '1.5 km',
           price_indicator: '₹₹',
           offer_text: 'Freshly crafted menu',
-          image_url: IMAGES.pizza,
+          image_url: '',
           is_open: true,
           created_at: serverTimestamp(),
           updated_at: serverTimestamp(),
@@ -525,7 +525,7 @@ export default function App() {
             0,
             100
           ),
-          image_url: IMAGES.pizza,
+          image_url: updates.image_url || '',
           is_open: updates.is_open ?? true,
           created_at: serverTimestamp(),
           updated_at: serverTimestamp(),
@@ -797,12 +797,13 @@ export default function App() {
 
   if (!authReady || profileLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#F7F6F2] p-6 text-center">
-        <div className="w-12 h-12 rounded-2xl bg-emerald-900 text-white flex items-center justify-center font-display text-lg font-bold animate-pulse mb-3">
-          e=&apos;
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center gap-3">
+        <div className="w-16 h-16 rounded-3xl glass-elevated flex items-center justify-center shadow-lg shadow-rose-600/15 animate-pulse">
+          <BitQIcon className="w-11 h-11" />
         </div>
-        <p className="text-xs font-medium text-stone-500">
-          Preparing your Bit&apos;Q table...
+        <BitQLogo size="md" />
+        <p className="text-xs font-medium text-slate-500">
+          Preparing your BiteQ experience...
         </p>
       </div>
     );

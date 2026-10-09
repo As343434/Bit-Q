@@ -396,7 +396,7 @@ export const CustomerExperience: React.FC<{
   };
 
   return (
-    <div className="min-h-screen bg-[#F7F6F2] pb-24 md:pb-16">
+    <div className="min-h-screen pb-24 md:pb-16">
       <NavigationBar
         activeTab={activeTab}
         onSelectTab={(tab) => {
@@ -476,13 +476,13 @@ export const CustomerExperience: React.FC<{
                       </h4>
                     </div>
                     <div className="text-right">
-                      <span className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-900">
-                        <Star className="w-4 h-4 fill-emerald-800 text-emerald-800" />
+                      <span className="inline-flex items-center gap-1 text-sm font-semibold text-rose-600">
+                        <Star className="w-4 h-4 fill-rose-600 text-rose-600" />
                         {(
-                          liveTrackedOrder.delivery_partner_rating || 4.8
+                          liveTrackedOrder.delivery_partner_rating || 5.0
                         ).toFixed(1)}
                       </span>
-                      <p className="text-xs text-stone-500">
+                      <p className="text-xs text-slate-500">
                         ETA {liveTrackedOrder.estimated_arrival}
                       </p>
                     </div>
@@ -557,15 +557,15 @@ export const CustomerExperience: React.FC<{
                     <h1 className="text-2xl sm:text-4xl font-bold font-display">
                       {selectedRestaurant.name}
                     </h1>
-                    <p className="text-xs sm:text-sm text-emerald-200 mt-1">
+                    <p className="text-xs sm:text-sm text-rose-200 mt-1">
                       {selectedRestaurant.is_open
                         ? selectedRestaurant.offer_text
                         : '🔴 Kitchen Closed — Currently Not Accepting New Orders'}
                     </p>
                   </div>
-                  <div className="glass-elevated text-stone-900 px-4 py-2.5 rounded-2xl flex items-center gap-4 text-xs font-semibold tabular-nums">
-                    <span className="inline-flex items-center gap-1 text-emerald-900">
-                      <Star className="w-4 h-4 fill-emerald-800 text-emerald-800" />
+                  <div className="glass-elevated text-slate-900 px-4 py-2.5 rounded-2xl flex items-center gap-4 text-xs font-semibold tabular-nums">
+                    <span className="inline-flex items-center gap-1 text-rose-600">
+                      <Star className="w-4 h-4 fill-rose-600 text-rose-600" />
                       {selectedRestaurant.rating.toFixed(1)}
                     </span>
                     <span aria-hidden="true">·</span>
@@ -584,10 +584,10 @@ export const CustomerExperience: React.FC<{
                   key={cat}
                   type="button"
                   onClick={() => setSelectedMenuSection(cat)}
-                  className={`min-h-[42px] px-4 py-2 rounded-2xl text-xs font-semibold transition-colors whitespace-nowrap ${
+                  className={`min-h-[42px] px-4 py-2 rounded-2xl text-xs font-semibold transition-all whitespace-nowrap ${
                     selectedMenuSection === cat
-                      ? 'bg-emerald-900 text-white'
-                      : 'glass-surface text-stone-700 hover:bg-white'
+                      ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white shadow-sm'
+                      : 'glass-surface text-slate-700 hover:bg-white'
                   }`}
                 >
                   {cat}
@@ -708,7 +708,7 @@ export const CustomerExperience: React.FC<{
                       <button
                         type="button"
                         onClick={() => setActiveTab('offers')}
-                        className="text-xs font-semibold text-emerald-900 hover:underline"
+                        className="text-xs font-semibold text-rose-600 hover:underline"
                       >
                         View all coupons →
                       </button>
@@ -989,14 +989,14 @@ export const CustomerExperience: React.FC<{
                       {/* Apply Coupon Box in Cart */}
                       <GlassCard className="p-5 space-y-3">
                         <div className="flex items-center justify-between">
-                          <h4 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
-                            <Tag className="w-4 h-4 text-emerald-900" />
+                          <h4 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                            <Tag className="w-4 h-4 text-rose-600" />
                             <span>Apply Coupon</span>
                           </h4>
                           <button
                             type="button"
                             onClick={() => setActiveTab('offers')}
-                            className="text-xs font-semibold text-emerald-900 hover:underline"
+                            className="text-xs font-semibold text-blue-600 hover:underline"
                           >
                             Browse coupons
                           </button>
@@ -1010,7 +1010,7 @@ export const CustomerExperience: React.FC<{
                               setCouponInput(e.target.value.toUpperCase())
                             }
                             placeholder="Enter coupon code (e.g. SAVE20)"
-                            className="flex-1 min-h-[46px] px-4 py-2 rounded-2xl bg-white border border-stone-200 text-sm font-mono uppercase focus:outline-none focus:border-emerald-800"
+                            className="flex-1 min-h-[46px] px-4 py-2 rounded-2xl bg-white border border-slate-200 text-sm font-mono uppercase focus:outline-none focus:border-rose-600"
                           />
                           <GlassButton
                             variant="primary"
@@ -1028,13 +1028,13 @@ export const CustomerExperience: React.FC<{
                         )}
 
                         {appliedCoupon && !couponError && (
-                          <div className="p-3.5 rounded-2xl bg-emerald-900/10 border border-emerald-900/20 flex items-center justify-between">
+                          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-rose-600/10 to-blue-600/10 border border-rose-500/20 flex items-center justify-between">
                             <div className="space-y-0.5">
-                              <p className="text-xs font-semibold text-emerald-950 flex items-center gap-1.5">
-                                <Check className="w-4 h-4 text-emerald-800" />
+                              <p className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+                                <Check className="w-4 h-4 text-rose-600" />
                                 <span>Coupon applied · {appliedCoupon.code}</span>
                               </p>
-                              <p className="text-xs text-emerald-800">
+                              <p className="text-xs text-blue-700">
                                 {appliedCoupon.discount_type === 'PERCENTAGE'
                                   ? `${appliedCoupon.discount_value}% OFF (Saved ₹${cartDiscount})`
                                   : `Flat ₹${appliedCoupon.discount_value} OFF`}

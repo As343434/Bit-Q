@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="460 220 480 560" fill="none">
+  <defs>
+    <linearGradient id="cherryBlueGrad" x1="480" y1="240" x2="900" y2="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#E11D48" />
+      <stop offset="52%" stop-color="#C026D3" />
+      <stop offset="100%" stop-color="#2563EB" />
+    </linearGradient>
+  </defs>
+  <!-- Speech Bubble Q Outer Arc (Top-Left Segment) -->
+  <path
+    d="M 592 633 A 174 174 0 0 1 756 330"
+    stroke="url(#cherryBlueGrad)"
+    stroke-width="22"
+    stroke-linecap="round"
+  />
+  <!-- Speech Bubble Q Outer Arc + Pointer Tail (Bottom-Right Segment) -->
+  <path
+    d="M 803 351 A 174 174 0 0 1 857 581 L 873 706 L 765 656 A 174 174 0 0 1 634 656"
+    stroke="url(#cherryBlueGrad)"
+    stroke-width="22"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <!-- Diagonal Spoon (Top-Right Handle to Solid Bowl) -->
+  <line
+    x1="806"
+    y1="268"
+    x2="676"
+    y2="438"
+    stroke="url(#cherryBlueGrad)"
+    stroke-width="22"
+    stroke-linecap="round"
+  />
+  <g transform="translate(657 464) rotate(37)">
+    <rect
+      x="-42"
+      y="-56"
+      width="84"
+      height="112"
+      rx="42"
+      fill="url(#cherryBlueGrad)"
+    />
+  </g>
+  <!-- Diagonal Fork (Bottom-Left Handle + Hollow Ring Head + 3 Tines) -->
+  <line
+    x1="581"
+    y1="732"
+    x2="686"
+    y2="592"
+    stroke="url(#cherryBlueGrad)"
+    stroke-width="22"
+    stroke-linecap="round"
+  />
+  <g transform="translate(706 565) rotate(37)">
+    <path
+      d="M -30 0 A 30 30 0 0 0 30 0 L 30 -72 M 0 -30 L 0 -72 M -30 0 L -30 -72"
+      stroke="url(#cherryBlueGrad)"
+      stroke-width="18"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
+    <circle
+      cx="0"
+      cy="0"
+      r="29"
+      stroke="url(#cherryBlueGrad)"
+      stroke-width="18"
+      fill="none"
+    />
+  </g>
+</svg>

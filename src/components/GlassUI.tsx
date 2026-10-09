@@ -27,7 +27,125 @@ import {
 } from '../types';
 import { POPULAR_LOCATIONS_DATA } from '../seedData';
 
-/* 1. ResilientImage (Zero-Broken-Image Policy + Reset on src change) */
+/* 0. BitQIcon & BitQLogo (Exact Vector Reproduction of Uploaded BITᵉ Speech-Bubble Utensil Q Mark) */
+export const BitQIcon: React.FC<{
+  className?: string;
+  monochrome?: boolean;
+}> = ({ className = 'w-9 h-9', monochrome = false }) => {
+  const gradId = React.useId();
+  const strokeColor = monochrome ? 'currentColor' : `url(#${gradId})`;
+  return (
+    <svg
+      viewBox="480 235 435 530"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      aria-hidden="true"
+    >
+      {!monochrome && (
+        <defs>
+          <linearGradient
+            id={gradId}
+            x1="490"
+            y1="250"
+            x2="895"
+            y2="745"
+            gradientUnits="userSpaceOnUse"
+          >
+            <stop offset="0%" stopColor="#E11D48" />
+            <stop offset="50%" stopColor="#9333EA" />
+            <stop offset="100%" stopColor="#2563EB" />
+          </linearGradient>
+        </defs>
+      )}
+      {/* Speech Bubble Q Outer Arc (Top-Left Segment) */}
+      <path
+        d="M 592 633 A 174 174 0 0 1 756 330"
+        stroke={strokeColor}
+        strokeWidth="24"
+        strokeLinecap="round"
+      />
+      {/* Speech Bubble Q Outer Arc + Pointer Tail (Bottom-Right Segment) */}
+      <path
+        d="M 803 351 A 174 174 0 0 1 857 581 L 873 706 L 765 656 A 174 174 0 0 1 634 656"
+        stroke={strokeColor}
+        strokeWidth="24"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* Diagonal Spoon (Top-Right Handle to Solid Bowl) */}
+      <line
+        x1="806"
+        y1="268"
+        x2="676"
+        y2="438"
+        stroke={strokeColor}
+        strokeWidth="24"
+        strokeLinecap="round"
+      />
+      <g transform="translate(657 464) rotate(37)">
+        <rect
+          x="-42"
+          y="-56"
+          width="84"
+          height="112"
+          rx="42"
+          fill={strokeColor}
+        />
+      </g>
+      {/* Diagonal Fork (Bottom-Left Handle + Hollow Ring Head + 3 Tines) */}
+      <line
+        x1="581"
+        y1="732"
+        x2="686"
+        y2="592"
+        stroke={strokeColor}
+        strokeWidth="24"
+        strokeLinecap="round"
+      />
+      <g transform="translate(706 565) rotate(37)">
+        <path
+          d="M -30 0 A 30 30 0 0 0 30 0 L 30 -72 M 0 -30 L 0 -72 M -30 0 L -30 -72"
+          stroke={strokeColor}
+          strokeWidth="20"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <circle
+          cx="0"
+          cy="0"
+          r="29"
+          stroke={strokeColor}
+          strokeWidth="20"
+          fill="none"
+        />
+      </g>
+    </svg>
+  );
+};
+
+export const BitQLogo: React.FC<{
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
+}> = ({ size = 'md', className = '' }) => {
+  const iconDimensions =
+    size === 'lg' ? 'w-12 h-12' : size === 'sm' ? 'w-8 h-8' : 'w-10 h-10';
+  const textSize =
+    size === 'lg' ? 'text-3xl' : size === 'sm' ? 'text-xl' : 'text-2xl';
+
+  return (
+    <span className={`inline-flex items-center gap-2 select-none ${className}`}>
+      <BitQIcon className={`${iconDimensions} shrink-0`} />
+      <span
+        className={`${textSize} font-extrabold tracking-tight leading-none font-sans text-cherry-blue`}
+      >
+        BiteQ
+      </span>
+    </span>
+  );
+};
+
+/* 1. ResilientImage (Zero-Broken-Image Policy + Professional Brand Fallback) */
 export const ResilientImage: React.FC<{
   src: string;
   alt: string;
@@ -42,11 +160,11 @@ export const ResilientImage: React.FC<{
   if (hasError || !src || !src.trim()) {
     return (
       <div
-        className={`flex flex-col items-center justify-center bg-gradient-to-br from-stone-200 via-stone-100 to-emerald-50/60 text-stone-500 p-4 text-center ${className}`}
+        className={`flex flex-col items-center justify-center bg-gradient-to-br from-rose-500/10 via-slate-50 to-blue-600/10 text-slate-600 p-4 text-center ${className}`}
       >
-        <Utensils className="w-6 h-6 mb-1.5 text-emerald-800/70" />
-        <span className="text-xs font-medium text-stone-600 line-clamp-1">
-          {alt || 'Dish Preview'}
+        <BitQIcon className="w-8 h-8 mb-1.5 opacity-85" />
+        <span className="text-xs font-semibold text-slate-700 line-clamp-1">
+          {alt || 'BiteQ Kitchen'}
         </span>
       </div>
     );
@@ -103,11 +221,11 @@ export const GlassButton: React.FC<{
 }) => {
   const variantStyles = {
     primary:
-      'bg-emerald-900 text-white hover:bg-emerald-800 shadow-md shadow-emerald-950/10 border border-emerald-800',
+      'bg-gradient-to-r from-rose-600 to-blue-600 text-white hover:from-rose-500 hover:to-blue-500 shadow-md shadow-rose-600/20 border border-rose-500/30',
     secondary:
-      'glass-surface text-stone-900 hover:bg-white/95 border border-stone-200/80',
+      'glass-surface text-slate-900 hover:bg-white/95 border border-slate-200/80',
     subtle:
-      'bg-stone-200/60 text-stone-700 hover:bg-stone-200 border border-transparent',
+      'bg-slate-200/60 text-slate-700 hover:bg-slate-200 border border-transparent',
     danger:
       'bg-rose-50/90 text-rose-800 hover:bg-rose-100 border border-rose-200/80',
   };
@@ -117,7 +235,7 @@ export const GlassButton: React.FC<{
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`min-h-[48px] px-5 py-2.5 rounded-2xl font-semibold text-sm inline-flex items-center justify-center gap-2 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-800 disabled:opacity-50 disabled:pointer-events-none ${
+      className={`min-h-[48px] px-5 py-2.5 rounded-2xl font-semibold text-sm inline-flex items-center justify-center gap-2 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 disabled:opacity-50 disabled:pointer-events-none ${
         variantStyles[variant]
       } ${fullWidth ? 'w-full' : ''} ${className}`}
     >
@@ -153,10 +271,10 @@ export const GlassInput: React.FC<{
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
-        <label className="text-xs font-medium text-stone-600">{label}</label>
+        <label className="text-xs font-medium text-slate-600">{label}</label>
         {verifiedBadge && (
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-800">
-            <Check className="w-3.5 h-3.5" /> Verified via Google
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700">
+            <Check className="w-3.5 h-3.5 text-rose-600" /> Verified via Google
           </span>
         )}
       </div>
@@ -171,8 +289,8 @@ export const GlassInput: React.FC<{
           placeholder={placeholder}
           className={`w-full min-h-[48px] px-4 py-2.5 rounded-2xl text-sm transition-colors duration-150 focus:outline-none ${
             readOnly
-              ? 'bg-stone-200/50 text-stone-600 border border-stone-200/70 cursor-not-allowed'
-              : 'bg-white/85 text-stone-900 border border-stone-200/90 focus:border-emerald-800 focus:bg-white'
+              ? 'bg-slate-200/50 text-slate-600 border border-slate-200/70 cursor-not-allowed'
+              : 'bg-white/85 text-slate-900 border border-slate-200/90 focus:border-rose-600 focus:bg-white'
           }`}
         />
       </div>
@@ -352,21 +470,21 @@ export const LocationSelector: React.FC<{
         className={`group text-left flex items-center gap-2.5 rounded-2xl transition-colors ${
           compact
             ? 'px-3 py-2 hover:bg-white/70 min-h-[44px]'
-            : 'w-full px-4 py-3 bg-white/85 border border-stone-200/90 hover:border-emerald-800 min-h-[48px]'
+            : 'w-full px-4 py-3 bg-white/85 border border-slate-200/90 hover:border-rose-600 min-h-[48px]'
         }`}
       >
-        <div className="w-9 h-9 rounded-xl bg-emerald-900/10 text-emerald-900 flex items-center justify-center shrink-0">
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-rose-600/15 to-blue-600/15 text-rose-600 flex items-center justify-center shrink-0">
           <MapPin className="w-4 h-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-medium text-stone-500 leading-tight">
+          <p className="text-[11px] font-medium text-slate-500 leading-tight">
             Where should we deliver?
           </p>
-          <p className="text-sm font-semibold text-stone-900 truncate">
+          <p className="text-sm font-semibold text-slate-900 truncate">
             {currentLocation || 'Search your location'}
           </p>
         </div>
-        <ChevronRight className="w-4 h-4 text-stone-400 group-hover:text-stone-700 shrink-0 transition-transform group-hover:translate-x-0.5" />
+        <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-700 shrink-0 transition-transform group-hover:translate-x-0.5" />
       </button>
 
       <GlassBottomSheet
@@ -376,26 +494,26 @@ export const LocationSelector: React.FC<{
       >
         <div className="space-y-4">
           <div className="relative">
-            <Search className="w-4 h-4 text-stone-400 absolute left-4 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search your location (e.g., Sector 49, Indiranagar)..."
-              className="w-full min-h-[48px] pl-11 pr-4 py-2.5 rounded-2xl bg-white border border-stone-200 text-sm focus:outline-none focus:border-emerald-800"
+              className="w-full min-h-[48px] pl-11 pr-4 py-2.5 rounded-2xl bg-white border border-slate-200 text-sm focus:outline-none focus:border-rose-600"
             />
           </div>
 
           <button
             type="button"
             onClick={handleUseCurrentGps}
-            className="w-full min-h-[46px] px-4 py-2.5 rounded-2xl bg-emerald-900/5 hover:bg-emerald-900/10 text-emerald-950 text-xs font-semibold flex items-center justify-between transition-colors"
+            className="w-full min-h-[46px] px-4 py-2.5 rounded-2xl bg-gradient-to-r from-rose-600/10 to-blue-600/10 hover:from-rose-600/15 hover:to-blue-600/15 text-slate-900 text-xs font-semibold flex items-center justify-between transition-colors"
           >
             <span className="inline-flex items-center gap-2">
-              <Crosshair className="w-4 h-4 text-emerald-800" />
+              <Crosshair className="w-4 h-4 text-rose-600" />
               <span>Use current GPS coordinates</span>
             </span>
-            <span className="text-emerald-800">Auto-detect</span>
+            <span className="text-blue-600 font-bold">Auto-detect</span>
           </button>
 
           {isSearching && (
@@ -420,26 +538,26 @@ export const LocationSelector: React.FC<{
                   <div className="flex items-center gap-3 min-w-0">
                     <MapPin
                       className={`w-4 h-4 shrink-0 ${
-                        isSelected ? 'text-emerald-800' : 'text-stone-400'
+                        isSelected ? 'text-rose-600' : 'text-slate-400'
                       }`}
                     />
                     <div className="min-w-0">
                       <p
                         className={`text-sm truncate ${
                           isSelected
-                            ? 'font-semibold text-emerald-950'
-                            : 'text-stone-800'
+                            ? 'font-semibold text-rose-700'
+                            : 'text-slate-800'
                         }`}
                       >
                         {loc.formattedAddress}
                       </p>
-                      <p className="text-[11px] font-mono text-stone-400 tabular-nums">
+                      <p className="text-[11px] font-mono text-slate-400 tabular-nums">
                         {loc.lat.toFixed(4)}° N, {loc.lng.toFixed(4)}° E
                       </p>
                     </div>
                   </div>
                   {isSelected && (
-                    <Check className="w-4 h-4 text-emerald-800 shrink-0" />
+                    <Check className="w-4 h-4 text-rose-600 shrink-0" />
                   )}
                 </button>
               );
@@ -494,15 +612,15 @@ export const CategoryCard: React.FC<{
       onClick={onClick}
       className={`min-h-[48px] px-4 py-2.5 rounded-2xl text-left transition-all duration-150 shrink-0 whitespace-nowrap ${
         active
-          ? 'bg-emerald-900 text-white shadow-md shadow-emerald-950/10'
-          : 'glass-surface text-stone-800 hover:bg-white/95'
+          ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white shadow-md shadow-rose-600/20'
+          : 'glass-surface text-slate-800 hover:bg-white/95'
       }`}
     >
       <p className="text-sm font-semibold">{label}</p>
       {subtitle && (
         <p
           className={`text-[11px] mt-0.5 ${
-            active ? 'text-emerald-100/90' : 'text-stone-500'
+            active ? 'text-rose-100' : 'text-slate-500'
           }`}
         >
           {subtitle}
@@ -524,27 +642,27 @@ export const OfferCard: React.FC<{
   return (
     <div className="glass-surface rounded-3xl p-5 min-w-[280px] md:min-w-[320px] flex flex-col justify-between gap-4">
       <div>
-        <div className="flex items-center justify-between gap-2 text-xs text-stone-500 mb-1.5">
-          <span className="font-mono font-semibold text-emerald-900">
+        <div className="flex items-center justify-between gap-2 text-xs text-slate-500 mb-1.5">
+          <span className="font-mono font-semibold text-rose-600">
             Code: {code}
           </span>
           <span aria-hidden="true">·</span>
-          <span>Verified Offer</span>
+          <span className="text-blue-600 font-medium">Verified Offer</span>
         </div>
-        <h4 className="text-base font-semibold text-stone-900 font-display leading-snug">
+        <h4 className="text-base font-semibold text-slate-900 font-display leading-snug">
           {title}
         </h4>
-        <p className="text-xs text-stone-600 mt-1 leading-relaxed">{subtitle}</p>
+        <p className="text-xs text-slate-600 mt-1 leading-relaxed">{subtitle}</p>
       </div>
-      <div className="flex items-center justify-between pt-3 border-t border-stone-200/50">
-        <span className="text-xs font-mono text-stone-500">{code}</span>
+      <div className="flex items-center justify-between pt-3 border-t border-slate-200/50">
+        <span className="text-xs font-mono text-slate-500">{code}</span>
         <button
           type="button"
           onClick={() => onApply(isApplied ? '' : code)}
-          className={`min-h-[38px] px-4 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+          className={`min-h-[38px] px-4 py-1.5 rounded-xl text-xs font-semibold transition-all ${
             isApplied
-              ? 'bg-emerald-900 text-white'
-              : 'bg-stone-900 text-white hover:bg-stone-800'
+              ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white shadow-sm'
+              : 'bg-slate-900 text-white hover:bg-slate-800'
           }`}
         >
           {isApplied ? 'APPLIED ✓' : 'APPLY'}
@@ -590,8 +708,8 @@ export const RestaurantCard: React.FC<{
             <h3 className="text-base font-semibold text-stone-900 truncate">
               {restaurant.name}
             </h3>
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-900 shrink-0 tabular-nums">
-              <Star className="w-3.5 h-3.5 fill-emerald-800 text-emerald-800" />
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600 shrink-0 tabular-nums">
+              <Star className="w-3.5 h-3.5 fill-rose-600 text-rose-600" />
               {restaurant.rating.toFixed(1)}
             </span>
           </div>
@@ -620,7 +738,7 @@ export const QuantitySelector: React.FC<{
   onDecrement: () => void;
 }> = ({ quantity, onIncrement, onDecrement }) => {
   return (
-    <div className="inline-flex items-center bg-emerald-900 text-white rounded-2xl p-1 shadow-sm">
+    <div className="inline-flex items-center bg-gradient-to-r from-rose-600 to-blue-600 text-white rounded-2xl p-1 shadow-sm">
       <button
         type="button"
         onClick={(e) => {
@@ -628,7 +746,7 @@ export const QuantitySelector: React.FC<{
           onDecrement();
         }}
         aria-label="Decrease quantity"
-        className="min-w-[36px] min-h-[36px] rounded-xl flex items-center justify-center hover:bg-emerald-800 transition-colors"
+        className="min-w-[36px] min-h-[36px] rounded-xl flex items-center justify-center hover:bg-white/15 transition-colors"
       >
         <Minus className="w-3.5 h-3.5" />
       </button>
@@ -642,7 +760,7 @@ export const QuantitySelector: React.FC<{
           onIncrement();
         }}
         aria-label="Increase quantity"
-        className="min-w-[36px] min-h-[36px] rounded-xl flex items-center justify-center hover:bg-emerald-800 transition-colors"
+        className="min-w-[36px] min-h-[36px] rounded-xl flex items-center justify-center hover:bg-white/15 transition-colors"
       >
         <Plus className="w-3.5 h-3.5" />
       </button>
@@ -701,7 +819,7 @@ export const FoodCard: React.FC<{
             <button
               type="button"
               onClick={onAdd}
-              className="min-h-[38px] px-4 py-1.5 rounded-xl bg-white border border-stone-200/90 text-xs font-semibold text-emerald-900 hover:bg-emerald-900 hover:text-white transition-colors shadow-sm"
+              className="min-h-[38px] px-4 py-1.5 rounded-xl bg-white border border-rose-200 text-xs font-semibold text-rose-600 hover:bg-gradient-to-r hover:from-rose-600 hover:to-blue-600 hover:text-white hover:border-transparent transition-all shadow-sm"
             >
               Add +
             </button>
@@ -785,16 +903,18 @@ export const StatusTimeline: React.FC<{ currentStatus: OrderStatus }> = ({
               <div
                 className={`w-6 h-6 rounded-full flex items-center justify-center text-xs transition-colors ${
                   isCompleted
-                    ? 'bg-emerald-900 text-white'
-                    : 'bg-stone-200 text-stone-500'
-                } ${isCurrent ? 'ring-4 ring-emerald-900/15' : ''}`}
+                    ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white'
+                    : 'bg-slate-200 text-slate-500'
+                } ${isCurrent ? 'ring-4 ring-rose-500/20' : ''}`}
               >
                 {isCompleted ? <Check className="w-3.5 h-3.5" /> : index + 1}
               </div>
               {index < ORDER_STEPS.length - 1 && (
                 <div
                   className={`w-0.5 h-6 my-1 ${
-                    index < currentIndex ? 'bg-emerald-800' : 'bg-stone-200'
+                    index < currentIndex
+                      ? 'bg-gradient-to-b from-rose-600 to-blue-600'
+                      : 'bg-slate-200'
                   }`}
                 />
               )}
@@ -803,15 +923,15 @@ export const StatusTimeline: React.FC<{ currentStatus: OrderStatus }> = ({
               <p
                 className={`text-sm ${
                   isCurrent
-                    ? 'font-semibold text-emerald-950'
+                    ? 'font-semibold text-rose-700'
                     : isCompleted
-                    ? 'font-medium text-stone-800'
-                    : 'text-stone-400'
+                    ? 'font-medium text-slate-800'
+                    : 'text-slate-400'
                 }`}
               >
                 {step.label}
               </p>
-              <p className="text-xs text-stone-500">{step.detail}</p>
+              <p className="text-xs text-slate-500">{step.detail}</p>
             </div>
           </div>
         );
@@ -855,15 +975,15 @@ export const OrderCard: React.FC<{
       </p>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 text-xs text-stone-600">
-          <Clock className="w-3.5 h-3.5 text-emerald-800" />
+        <div className="flex items-center gap-1.5 text-xs text-slate-600">
+          <Clock className="w-3.5 h-3.5 text-rose-600" />
           <span>Est. {order.estimated_arrival}</span>
           {order.delivery_partner_name && (
             <>
               <span aria-hidden="true">·</span>
               <span>
                 Courier: {order.delivery_partner_name} (
-                {(order.delivery_partner_rating || 4.8).toFixed(1)} ★)
+                {(order.delivery_partner_rating || 5.0).toFixed(1)} ★)
               </span>
             </>
           )}
@@ -904,19 +1024,19 @@ export const StatusToggle: React.FC<{
       onClick={() => onToggle(!isOnline)}
       className={`min-h-[44px] px-4 py-2 rounded-2xl flex items-center gap-2.5 transition-all duration-150 ${
         isOnline
-          ? 'bg-emerald-900 text-white shadow-md shadow-emerald-950/15'
+          ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white shadow-md shadow-rose-600/20'
           : mode === 'kitchen'
-          ? 'bg-rose-900 text-white'
-          : 'glass-surface text-stone-700'
+          ? 'bg-slate-800 text-white'
+          : 'glass-surface text-slate-700'
       }`}
     >
       <span
         className={`w-2.5 h-2.5 rounded-full ${
           isOnline
-            ? 'bg-emerald-300 animate-pulse'
+            ? 'bg-white animate-pulse'
             : mode === 'kitchen'
-            ? 'bg-rose-300'
-            : 'bg-stone-400'
+            ? 'bg-rose-400'
+            : 'bg-slate-400'
         }`}
       />
       <span className="text-xs font-semibold tracking-wide whitespace-nowrap">
@@ -949,7 +1069,7 @@ export const ProfileCard: React.FC<{
             className="w-16 h-16 rounded-2xl object-cover border border-white"
           />
         ) : (
-          <div className="w-16 h-16 rounded-2xl bg-emerald-900 text-white flex items-center justify-center text-xl font-semibold font-display">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-rose-600 to-blue-600 text-white flex items-center justify-center text-xl font-semibold font-display">
             {user.name.charAt(0).toUpperCase()}
           </div>
         )}
@@ -1003,26 +1123,26 @@ export const NavigationBar: React.FC<{
 
   return (
     <>
-      <header className="sticky top-0 z-30 glass-surface border-b border-stone-200/60 px-6 py-3.5">
+      <header className="sticky top-0 z-30 glass-surface border-b border-slate-200/60 px-6 py-3">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          {/* Zone 1: Single Text Element Brand Wordmark */}
+          {/* Zone 1: Uploaded Bit'Q Brand Logo Lockup */}
           <button
             type="button"
             onClick={() => onSelectTab('home')}
-            className="text-xl font-bold tracking-tight text-stone-900 font-display whitespace-nowrap"
+            className="inline-flex items-center gap-2 whitespace-nowrap"
           >
-            Bit&apos;Q (e=&apos;)
+            <BitQLogo size="sm" />
           </button>
 
           {/* Zone 2: 5 Clean Text Navigation Links */}
-          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-stone-600">
+          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600">
             <button
               type="button"
               onClick={() => onSelectTab('home')}
               className={`py-1 transition-colors whitespace-nowrap ${
                 activeTab === 'home'
-                  ? 'text-stone-900 font-semibold underline underline-offset-8 decoration-emerald-800 decoration-2'
-                  : 'hover:text-stone-900'
+                  ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-rose-600 decoration-2'
+                  : 'hover:text-slate-900'
               }`}
             >
               Discover
@@ -1032,8 +1152,8 @@ export const NavigationBar: React.FC<{
               onClick={() => onSelectTab('offers')}
               className={`py-1 transition-colors whitespace-nowrap ${
                 activeTab === 'offers'
-                  ? 'text-stone-900 font-semibold underline underline-offset-8 decoration-emerald-800 decoration-2'
-                  : 'hover:text-stone-900'
+                  ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-rose-600 decoration-2'
+                  : 'hover:text-slate-900'
               }`}
             >
               Offers
@@ -1043,8 +1163,8 @@ export const NavigationBar: React.FC<{
               onClick={() => onSelectTab('orders')}
               className={`py-1 transition-colors whitespace-nowrap ${
                 activeTab === 'orders'
-                  ? 'text-stone-900 font-semibold underline underline-offset-8 decoration-emerald-800 decoration-2'
-                  : 'hover:text-stone-900'
+                  ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-rose-600 decoration-2'
+                  : 'hover:text-slate-900'
               }`}
             >
               Orders
@@ -1054,8 +1174,8 @@ export const NavigationBar: React.FC<{
               onClick={() => onSelectTab('help')}
               className={`py-1 transition-colors whitespace-nowrap ${
                 activeTab === 'help'
-                  ? 'text-stone-900 font-semibold underline underline-offset-8 decoration-emerald-800 decoration-2'
-                  : 'hover:text-stone-900'
+                  ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-rose-600 decoration-2'
+                  : 'hover:text-slate-900'
               }`}
             >
               Help Desk
@@ -1065,8 +1185,8 @@ export const NavigationBar: React.FC<{
               onClick={() => onSelectTab('profile')}
               className={`py-1 transition-colors whitespace-nowrap ${
                 activeTab === 'profile'
-                  ? 'text-stone-900 font-semibold underline underline-offset-8 decoration-emerald-800 decoration-2'
-                  : 'hover:text-stone-900'
+                  ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-rose-600 decoration-2'
+                  : 'hover:text-slate-900'
               }`}
             >
               Profile
@@ -1078,7 +1198,7 @@ export const NavigationBar: React.FC<{
             <button
               type="button"
               onClick={() => onSelectTab('cart')}
-              className="min-h-[42px] px-4 py-2 rounded-2xl bg-emerald-900 text-white text-xs font-semibold hover:bg-emerald-800 transition-colors whitespace-nowrap tabular-nums"
+              className="min-h-[42px] px-4 py-2 rounded-2xl bg-gradient-to-r from-rose-600 to-blue-600 text-white text-xs font-semibold hover:from-rose-500 hover:to-blue-500 shadow-sm shadow-rose-600/20 transition-all whitespace-nowrap tabular-nums"
             >
               Bag · {cartCount}
             </button>
@@ -1089,7 +1209,7 @@ export const NavigationBar: React.FC<{
       {/* Mobile Bottom Navigation Bar */}
       <nav
         aria-label="Mobile Navigation"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 glass-elevated border-t border-stone-200/80 grid grid-cols-5 items-center h-16 px-2"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 glass-elevated border-t border-slate-200/80 grid grid-cols-5 items-center h-16 px-2"
       >
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
@@ -1099,7 +1219,7 @@ export const NavigationBar: React.FC<{
               type="button"
               onClick={() => onSelectTab(item.id)}
               className={`min-h-[48px] flex flex-col items-center justify-center rounded-xl transition-colors ${
-                isActive ? 'text-emerald-900 font-semibold' : 'text-stone-500'
+                isActive ? 'text-rose-600 font-semibold' : 'text-slate-500'
               }`}
             >
               {item.icon}
