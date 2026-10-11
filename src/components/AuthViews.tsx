@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { User } from 'firebase/auth';
 import { Store, Bike, AlertCircle } from 'lucide-react';
 import { UserRole, GeoLocationData } from '../types';
@@ -8,11 +9,10 @@ import {
   GlassInput,
   LocationSelector,
   TimeSlotDialPicker,
-  BitQLogo,
   BitQIcon,
 } from './GlassUI';
 
-/* 1. Main Login / Welcome Screen — Unified Centered Auth Card */
+/* 1. Main Login / Welcome Screen — Unified Centered Animated Auth Card (Logo Only) */
 export const LoginScreen: React.FC<{
   onGoogleLogin: (intendedRole: UserRole) => Promise<void>;
   isLoading: boolean;
@@ -27,99 +27,102 @@ export const LoginScreen: React.FC<{
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-between relative overflow-hidden px-4 py-8 md:py-12">
-      {/* Cherry Red & Blue Ambient Background Gradients */}
+    <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden px-4 py-10">
+      {/* Animated Floating Cherry Red & Royal Blue Ambient Background Orbs */}
       <div
         aria-hidden="true"
         className="pointer-events-none fixed inset-0 overflow-hidden z-0"
       >
-        <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-rose-600/15 blur-3xl" />
-        <div className="absolute top-1/3 -right-24 w-96 h-96 rounded-full bg-blue-600/15 blur-3xl" />
-        <div className="absolute -bottom-24 left-1/3 w-96 h-96 rounded-full bg-rose-500/10 blur-3xl" />
+        <div className="absolute -top-28 -left-28 w-[420px] h-[420px] rounded-full bg-rose-600/15 blur-3xl animate-float" />
+        <div className="absolute top-1/4 -right-28 w-[420px] h-[420px] rounded-full bg-blue-600/15 blur-3xl animate-float-delayed" />
+        <div className="absolute -bottom-28 left-1/4 w-[380px] h-[380px] rounded-full bg-rose-500/12 blur-3xl animate-float" />
       </div>
 
-      {/* Top Brand Header with Uploaded BITᵉ Q Icon & Lockup */}
-      <div className="relative z-10 max-w-md mx-auto w-full text-center space-y-2">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-3xl glass-elevated shadow-lg shadow-rose-600/10 mb-1">
-          <BitQIcon className="w-11 h-11" />
-        </div>
-        <div className="flex justify-center">
-          <BitQLogo size="lg" />
-        </div>
-        <p className="text-xs font-medium text-slate-500 tracking-wide">
-          Artisanal Neighborhood Dining
-        </p>
-      </div>
+      {/* Unified Centered Authentication Card — Single Logo Only, No Clutter */}
+      <motion.main
+        initial={{ opacity: 0, y: 24, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+        className="relative z-10 max-w-md mx-auto w-full"
+      >
+        <div className="glass-elevated rounded-[32px] p-7 sm:p-9 flex flex-col items-center gap-6 text-center">
+          {/* Single Iconic Logo Emblem */}
+          <motion.div
+            initial={{ scale: 0.85, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            whileHover={{ scale: 1.06, rotate: -3 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 20 }}
+            className="w-20 h-20 rounded-3xl glass-surface shadow-lg shadow-rose-600/15 border border-white flex items-center justify-center"
+          >
+            <BitQIcon className="w-12 h-12" />
+          </motion.div>
 
-      {/* Unified Centered Authentication Card */}
-      <main className="relative z-10 max-w-md mx-auto w-full my-6">
-        <div className="glass-elevated rounded-3xl p-6 sm:p-8 flex flex-col gap-6 text-center">
-          {/* Professional Branded Glass Header Banner (No Mock Image) */}
-          <div className="relative w-full rounded-2xl overflow-hidden bg-gradient-to-br from-rose-600/10 via-white/80 to-blue-600/10 border border-rose-500/15 p-5 flex items-center justify-between text-left">
-            <div className="space-y-1">
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-rose-600">
-                BiteQ Concierge Network
-              </span>
-              <p className="text-sm font-semibold text-slate-900">
-                Curated local kitchens · Live route tracking
-              </p>
-              <p className="text-xs text-slate-500">
-                Customers, Restaurant Partners &amp; Delivery Fleet
-              </p>
-            </div>
-            <div className="w-12 h-12 rounded-2xl bg-white/90 shadow-sm border border-rose-100 flex items-center justify-center shrink-0">
-              <BitQIcon className="w-8 h-8" />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 font-display leading-tight">
+          {/* Editorial Headline & Tagline */}
+          <div className="space-y-2">
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 font-display leading-tight">
               Good food, closer to you.
-            </h2>
-            <p className="text-sm text-slate-600">Discover · Order · Enjoy</p>
+            </h1>
+            <p className="text-sm text-slate-500">
+              Discover · Order · Enjoy
+            </p>
           </div>
 
           {/* Unified Sign In / Sign Up & Continue with Google Control Block */}
-          <div className="w-full flex flex-col gap-3">
-            {/* Symmetrical 2-Column Sign In / Sign Up Switcher */}
-            <div className="w-full grid grid-cols-2 gap-2 p-1.5 rounded-2xl bg-stone-200/70">
-              <button
-                type="button"
-                onClick={() => setAuthMode('signin')}
-                className={`w-full h-11 rounded-xl text-sm font-semibold flex items-center justify-center transition-all ${
-                  authMode === 'signin'
-                    ? 'bg-white text-stone-900 shadow-sm'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => setAuthMode('signup')}
-                className={`w-full h-11 rounded-xl text-sm font-semibold flex items-center justify-center transition-all ${
-                  authMode === 'signup'
-                    ? 'bg-white text-stone-900 shadow-sm'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-              >
-                Sign Up
-              </button>
+          <div className="w-full flex flex-col gap-3.5">
+            {/* Symmetrical 2-Column Animated Sign In / Sign Up Switcher */}
+            <div className="w-full grid grid-cols-2 gap-1.5 p-1.5 rounded-2xl bg-slate-200/70 relative">
+              {(['signin', 'signup'] as const).map((mode) => {
+                const isActive = authMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setAuthMode(mode)}
+                    className={`relative z-10 w-full h-11 rounded-xl text-sm font-semibold flex items-center justify-center transition-colors ${
+                      isActive
+                        ? 'text-slate-900'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {isActive && (
+                      <motion.span
+                        layoutId="authModeActivePill"
+                        transition={{
+                          type: 'spring',
+                          stiffness: 420,
+                          damping: 30,
+                        }}
+                        className="absolute inset-0 rounded-xl bg-white shadow-sm -z-10"
+                      />
+                    )}
+                    <span>{mode === 'signin' ? 'Sign In' : 'Sign Up'}</span>
+                  </button>
+                );
+              })}
             </div>
 
-            {error && (
-              <div className="w-full p-3.5 rounded-2xl bg-rose-50/90 border border-rose-200 text-left flex items-start gap-2.5 text-xs text-rose-900">
-                <AlertCircle className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" />
-                <span>{error}</span>
-              </div>
-            )}
+            <AnimatePresence>
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="w-full p-3.5 rounded-2xl bg-rose-50/90 border border-rose-200 text-left flex items-start gap-2.5 text-xs text-rose-900"
+                >
+                  <AlertCircle className="w-4 h-4 text-rose-700 shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Primary Google Authentication CTA — Cherry Red & Blue Gradient */}
-            <button
+            <motion.button
               type="button"
               disabled={isLoading}
+              whileHover={{ y: -2 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => handleLoginClick('customer')}
-              className="w-full h-12 px-5 rounded-2xl bg-gradient-to-r from-rose-600 to-blue-600 hover:from-rose-500 hover:to-blue-500 text-white active:scale-[0.99] transition-all duration-150 shadow-md shadow-rose-600/20 flex items-center justify-center gap-3 font-semibold text-sm disabled:opacity-60"
+              className="w-full h-12 px-5 rounded-2xl bg-gradient-to-r from-rose-600 to-blue-600 hover:from-rose-500 hover:to-blue-500 text-white transition-all duration-150 shadow-lg shadow-rose-600/20 flex items-center justify-center gap-3 font-semibold text-sm disabled:opacity-60"
             >
               <span className="w-6 h-6 rounded-full bg-white flex items-center justify-center shrink-0">
                 <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
@@ -146,7 +149,7 @@ export const LoginScreen: React.FC<{
                   ? 'Connecting with Google...'
                   : 'Continue with Google'}
               </span>
-            </button>
+            </motion.button>
           </div>
 
           {/* Subtle Secondary Partner Pathways — Aligned on Identical Grid Container */}
@@ -155,32 +158,32 @@ export const LoginScreen: React.FC<{
               Own a business or deliver with us?
             </p>
             <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button
+              <motion.button
                 type="button"
                 disabled={isLoading}
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => handleLoginClick('restaurant_partner')}
-                className="w-full h-12 px-4 rounded-2xl glass-surface hover:bg-white/95 text-slate-800 text-xs font-semibold flex items-center justify-center gap-2 transition-transform active:scale-[0.98]"
+                className="w-full h-12 px-4 rounded-2xl glass-surface hover:bg-white/95 text-slate-800 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
               >
                 <Store className="w-4 h-4 text-rose-600 shrink-0" />
                 <span>Own a Restaurant</span>
-              </button>
-              <button
+              </motion.button>
+              <motion.button
                 type="button"
                 disabled={isLoading}
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => handleLoginClick('delivery_partner')}
-                className="w-full h-12 px-4 rounded-2xl glass-surface hover:bg-white/95 text-slate-800 text-xs font-semibold flex items-center justify-center gap-2 transition-transform active:scale-[0.98]"
+                className="w-full h-12 px-4 rounded-2xl glass-surface hover:bg-white/95 text-slate-800 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
               >
                 <Bike className="w-4 h-4 text-blue-600 shrink-0" />
                 <span>Become a Partner</span>
-              </button>
+              </motion.button>
             </div>
           </div>
         </div>
-      </main>
-
-      <footer className="relative z-10 text-center text-xs text-slate-400">
-        BiteQ · Verified Google Authentication Only
-      </footer>
+      </motion.main>
     </div>
   );
 };
@@ -258,15 +261,20 @@ export const OnboardingScreen: React.FC<{
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-10">
-      <div className="glass-elevated rounded-3xl w-full max-w-lg p-6 sm:p-8 space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 20, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+        className="glass-elevated rounded-3xl w-full max-w-lg p-6 sm:p-8 space-y-6"
+      >
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs font-semibold text-rose-600">
               {role === 'restaurant_partner'
-                ? 'BiteQ Restaurant Partner Onboarding'
+                ? 'Restaurant Partner Onboarding'
                 : role === 'delivery_partner'
-                ? 'BiteQ Delivery Partner Onboarding'
-                : 'Almost there · Let’s personalize your BiteQ account'}
+                ? 'Delivery Partner Onboarding'
+                : 'Almost there · Personalize your account'}
             </p>
             <h1 className="text-2xl font-bold text-slate-900 font-display mt-1">
               {role === 'restaurant_partner'
@@ -276,18 +284,9 @@ export const OnboardingScreen: React.FC<{
                 : 'Create your account'}
             </h1>
           </div>
-          {firebaseUser.photoURL ? (
-            <img
-              src={firebaseUser.photoURL}
-              alt={name}
-              referrerPolicy="no-referrer"
-              className="w-14 h-14 rounded-2xl object-cover border border-white shadow-sm"
-            />
-          ) : (
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-rose-600 to-blue-600 text-white flex items-center justify-center text-lg font-bold font-display">
-              {(name || 'B').charAt(0).toUpperCase()}
-            </div>
-          )}
+          <div className="w-14 h-14 rounded-2xl glass-surface border border-white flex items-center justify-center shadow-sm">
+            <BitQIcon className="w-9 h-9" />
+          </div>
         </div>
 
         {error && (
@@ -443,7 +442,7 @@ export const OnboardingScreen: React.FC<{
             </GlassButton>
           </div>
         </form>
-      </div>
+      </motion.div>
     </div>
   );
 };

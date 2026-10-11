@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft,
   Star,
@@ -663,9 +664,35 @@ export const CustomerExperience: React.FC<{
           <>
             {/* HOME DISCOVERY VIEW */}
             {activeTab === 'home' && (
-              <div className="space-y-10 animate-fadeIn">
-                <section className="glass-elevated rounded-3xl p-5 sm:p-7 space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+                className="space-y-10"
+              >
+                <section className="relative overflow-hidden glass-elevated rounded-[32px] p-6 sm:p-8 space-y-6">
+                  {/* Subtle Ambient Cherry-Blue Glow */}
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -top-24 -right-24 w-64 h-64 rounded-full bg-gradient-to-br from-rose-500/15 to-blue-600/15 blur-3xl"
+                  />
+
+                  <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold tracking-wide text-rose-600">
+                        Curated Local Dining
+                      </p>
+                      <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 font-display leading-tight">
+                        Good food, closer to you
+                        {user.name ? `, ${user.name.split(' ')[0]}` : ''}.
+                      </h1>
+                    </div>
+                    <p className="text-xs text-slate-500 max-w-xs">
+                      Real-time menus and live kitchen tracking from neighborhood chefs.
+                    </p>
+                  </div>
+
+                  <div className="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
                     <div className="md:col-span-5">
                       <LocationSelector
                         currentLocation={user.location}
@@ -681,7 +708,7 @@ export const CustomerExperience: React.FC<{
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2.5 overflow-x-auto pt-1 pb-1">
+                  <div className="relative z-10 flex items-center gap-2.5 overflow-x-auto pt-1 pb-1">
                     {FOOD_CATEGORIES.map((cat) => (
                       <CategoryCard
                         key={cat.id}
@@ -801,7 +828,7 @@ export const CustomerExperience: React.FC<{
                     </div>
                   )}
                 </section>
-              </div>
+              </motion.div>
             )}
 
             {/* DEDICATED OFFERS / COUPONS PAGE */}

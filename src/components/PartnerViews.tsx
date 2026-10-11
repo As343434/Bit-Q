@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { motion } from 'motion/react';
 import {
   Plus,
   Edit3,
@@ -162,21 +163,23 @@ export const RestaurantPartnerExperience: React.FC<{
     }
   }, [restaurant]);
 
+  const partnerUid = user.google_uid || user.id;
   const myRestaurantId =
     restaurant?.id ||
     user.restaurant_id ||
-    `rest-${user.google_uid.slice(0, 12)}`;
+    `rest-${partnerUid.slice(0, 12)}`;
 
   const myCategories = useMemo(() => {
     const list = categories
       .filter(
         (c) =>
           c.restaurant_id === myRestaurantId ||
-          c.owner_uid === user.google_uid
+          c.owner_uid === partnerUid ||
+          c.owner_uid === user.id
       )
       .sort((a, b) => a.display_order - b.display_order);
     return list;
-  }, [categories, myRestaurantId, user.google_uid]);
+  }, [categories, myRestaurantId, partnerUid, user.id]);
 
   // Combined selectable categories for Add Dish dropdown
   const selectableCategoryNames = useMemo(() => {
@@ -188,26 +191,30 @@ export const RestaurantPartnerExperience: React.FC<{
   const myMenuItems = useMemo(() => {
     return menuItems.filter(
       (m) =>
-        m.restaurant_id === myRestaurantId || m.owner_uid === user.google_uid
+        m.restaurant_id === myRestaurantId ||
+        m.owner_uid === partnerUid ||
+        m.owner_uid === user.id
     );
-  }, [menuItems, myRestaurantId, user.google_uid]);
+  }, [menuItems, myRestaurantId, partnerUid, user.id]);
 
   const myCoupons = useMemo(() => {
     return coupons.filter(
       (c) =>
         c.restaurant_id === myRestaurantId ||
-        c.owner_uid === user.google_uid ||
+        c.owner_uid === partnerUid ||
+        c.owner_uid === user.id ||
         c.restaurant_id === 'GLOBAL'
     );
-  }, [coupons, myRestaurantId, user.google_uid]);
+  }, [coupons, myRestaurantId, partnerUid, user.id]);
 
   const restaurantOrders = useMemo(() => {
     return orders.filter(
       (o) =>
         o.restaurant_id === myRestaurantId ||
-        o.restaurant_owner_uid === user.google_uid
+        o.restaurant_owner_uid === partnerUid ||
+        o.restaurant_owner_uid === user.id
     );
-  }, [orders, myRestaurantId, user.google_uid]);
+  }, [orders, myRestaurantId, partnerUid, user.id]);
 
   const totalRevenue = useMemo(
     () =>
@@ -387,20 +394,34 @@ export const RestaurantPartnerExperience: React.FC<{
                 { id: 'offers', label: 'Offers / Coupons' },
                 { id: 'profile', label: 'Kitchen Profile' },
               ] as { id: RestaurantTab; label: string }[]
-            ).map((nav) => (
-              <button
-                key={nav.id}
-                type="button"
-                onClick={() => setActiveTab(nav.id)}
-                className={`py-1 transition-colors whitespace-nowrap ${
-                  activeTab === nav.id
-                    ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-rose-600 decoration-2'
-                    : 'hover:text-slate-900'
-                }`}
-              >
-                {nav.label}
-              </button>
-            ))}
+            ).map((nav) => {
+              const isActive = activeTab === nav.id;
+              return (
+                <button
+                  key={nav.id}
+                  type="button"
+                  onClick={() => setActiveTab(nav.id)}
+                  className={`relative py-1.5 transition-colors whitespace-nowrap ${
+                    isActive
+                      ? 'text-slate-900 font-semibold'
+                      : 'hover:text-slate-900'
+                  }`}
+                >
+                  <span>{nav.label}</span>
+                  {isActive && (
+                    <motion.span
+                      layoutId="restaurantTopNavUnderline"
+                      transition={{
+                        type: 'spring',
+                        stiffness: 420,
+                        damping: 30,
+                      }}
+                      className="absolute inset-x-0 -bottom-1 h-0.5 rounded-full bg-gradient-to-r from-rose-600 to-blue-600"
+                    />
+                  )}
+                </button>
+              );
+            })}
           </nav>
 
           {/* Dedicated Kitchen Status Toggle (🟢 OPEN vs 🔴 CLOSED) */}
@@ -1579,20 +1600,34 @@ export const DeliveryPartnerExperience: React.FC<{
                 { id: 'earnings', label: 'Earnings' },
                 { id: 'profile', label: 'Courier Profile' },
               ] as { id: DeliveryTab; label: string }[]
-            ).map((nav) => (
-              <button
-                key={nav.id}
-                type="button"
-                onClick={() => setActiveTab(nav.id)}
-                className={`py-1 transition-colors whitespace-nowrap ${
-                  activeTab === nav.id
-                    ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-rose-600 decoration-2'
-                    : 'hover:text-slate-900'
-                }`}
-              >
-                {nav.label}
-              </button>
-            ))}
+            ).map((nav) => {
+              const isActive = activeTab === nav.id;
+              return (
+                <button
+                  key={nav.id}
+                  type="button"
+                  onClick={() => setActiveTab(nav.id)}
+                  className={`relative py-1.5 transition-colors whitespace-nowrap ${
+                    isActive
+                      ? 'text-slate-900 font-semibold'
+                      : 'hover:text-slate-900'
+                  }`}
+                >
+                  <span>{nav.label}</span>
+                  {isActive && (
+                    <motion.span
+                      layoutId="courierTopNavUnderline"
+                      transition={{
+                        type: 'spring',
+                        stiffness: 420,
+                        damping: 30,
+                      }}
+                      className="absolute inset-x-0 -bottom-1 h-0.5 rounded-full bg-gradient-to-r from-rose-600 to-blue-600"
+                    />
+                  )}
+                </button>
+              );
+            })}
           </nav>
 
           {/* Delivery Status ONLINE / OFFLINE Control */}

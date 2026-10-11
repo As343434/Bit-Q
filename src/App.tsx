@@ -84,22 +84,27 @@ export default function App() {
         const userSnap = await getDoc(userDocRef);
         if (userSnap.exists()) {
           const data = userSnap.data();
+          const resolvedUid = data.google_uid || userSnap.id || currentUser.uid;
           setUserProfile({
             id: userSnap.id,
-            google_uid: data.google_uid,
-            name: data.name,
-            email: data.email,
-            profile_image: data.profile_image || '',
-            location: data.location,
+            google_uid: resolvedUid,
+            name: data.name || currentUser.displayName || 'BiteQ User',
+            email: data.email || currentUser.email || '',
+            profile_image: data.profile_image || currentUser.photoURL || '',
+            location: data.location || 'Indiranagar, Bengaluru',
             lat: data.lat,
             lng: data.lng,
             place_id: data.place_id,
-            role: data.role as UserRole,
+            role: (data.role as UserRole) || 'customer',
             delivery_preferences: data.delivery_preferences,
             dietary_preferences: data.dietary_preferences,
-            is_online: data.is_online,
-            delivery_range_km: data.delivery_range_km,
-            restaurant_id: data.restaurant_id,
+            is_online: data.is_online ?? true,
+            delivery_range_km: data.delivery_range_km ?? 5,
+            restaurant_id:
+              data.restaurant_id ||
+              (data.role === 'restaurant_partner'
+                ? `rest-${resolvedUid.slice(0, 12)}`
+                : ''),
             total_rides: data.total_rides ?? 0,
             orders_delivered: data.orders_delivered ?? 0,
             cancelled_deliveries: data.cancelled_deliveries ?? 0,
@@ -131,7 +136,7 @@ export default function App() {
     if (!authReady || !firebaseUser || !userProfile) return;
 
     const unsubRestaurants = onSnapshot(
-      collection(db, 'restaurants'),
+      query(collection(db, 'restaurants'), where('name', '>=', '')),
       (snap) => {
         const list: Restaurant[] = snap.docs.map((d) => ({
           id: d.id,
@@ -143,7 +148,7 @@ export default function App() {
     );
 
     const unsubCategories = onSnapshot(
-      collection(db, 'restaurant_categories'),
+      query(collection(db, 'restaurant_categories'), where('name', '>=', '')),
       (snap) => {
         const list: RestaurantCategory[] = snap.docs.map((d) => ({
           id: d.id,
@@ -155,7 +160,7 @@ export default function App() {
     );
 
     const unsubMenu = onSnapshot(
-      collection(db, 'menu_items'),
+      query(collection(db, 'menu_items'), where('name', '>=', '')),
       (snap) => {
         const list: MenuItem[] = snap.docs.map((d) => ({
           id: d.id,
@@ -167,7 +172,7 @@ export default function App() {
     );
 
     const unsubCoupons = onSnapshot(
-      collection(db, 'coupons'),
+      query(collection(db, 'coupons'), where('code', '>=', '')),
       (snap) => {
         const list: Coupon[] = snap.docs.map((d) => ({
           id: d.id,
@@ -179,7 +184,7 @@ export default function App() {
     );
 
     const unsubOrders = onSnapshot(
-      collection(db, 'orders'),
+      query(collection(db, 'orders'), where('customer_uid', '>=', '')),
       (snap) => {
         const list: Order[] = snap.docs.map((d) => ({
           id: d.id,
@@ -444,7 +449,12 @@ export default function App() {
 
     try {
       await setDoc(doc(db, 'orders', orderId), newOrder);
-      return { id: orderId, ...newOrder };
+      const createdOrder: Order = { id: orderId, ...newOrder };
+      setOrders((prev) => [
+        createdOrder,
+        ...prev.filter((o) => o.id !== orderId),
+      ]);
+      return createdOrder;
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `orders/${orderId}`);
     }
@@ -470,6 +480,18 @@ export default function App() {
         created_at: serverTimestamp(),
         updated_at: serverTimestamp(),
       });
+      setSupportTickets((prev) => [
+        {
+          id: ticketId,
+          user_uid: firebaseUser.uid,
+          category: ticket.category,
+          order_id: ticket.order_id.slice(0, 128),
+          subject: ticket.subject.slice(0, 120),
+          message: ticket.message.slice(0, 800),
+          status: 'OPEN',
+        },
+        ...prev.filter((t) => t.id !== ticketId),
+      ]);
     } catch (err) {
       handleFirestoreError(
         err,
@@ -501,8 +523,12 @@ export default function App() {
           ...updates,
           updated_at: serverTimestamp(),
         });
+        setRestaurants((prev) =>
+          prev.map((r) => (r.id === restId ? { ...r, ...updates } : r))
+        );
       } else {
-        await setDoc(doc(db, 'restaurants', restId), {
+        const newRestObj: Restaurant = {
+          id: restId,
           owner_uid: firebaseUser.uid,
           name: (updates.name || `${userProfile.name}'s Kitchen`).slice(0, 120),
           owner_name: userProfile.name.slice(0, 100),
@@ -515,7 +541,7 @@ export default function App() {
           lng: userProfile.lng || 77.6408,
           cuisine: (updates.cuisine || 'Artisanal Kitchen').slice(0, 80),
           operating_hours: (
-            updates.operating_hours || '11:00 AM – 10:30 PM'
+            updates.operating_hours || '09:00 AM – 10:30 PM'
           ).slice(0, 80),
           rating: 5.0,
           delivery_time: '25–30 min',
@@ -527,9 +553,17 @@ export default function App() {
           ),
           image_url: updates.image_url?.trim() || '/favicon.svg',
           is_open: updates.is_open ?? true,
+        };
+        const { id: _unusedId, ...firestorePayload } = newRestObj;
+        await setDoc(doc(db, 'restaurants', restId), {
+          ...firestorePayload,
           created_at: serverTimestamp(),
           updated_at: serverTimestamp(),
         });
+        setRestaurants((prev) => [
+          newRestObj,
+          ...prev.filter((r) => r.id !== restId),
+        ]);
       }
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `restaurants/${restId}`);
@@ -559,6 +593,10 @@ export default function App() {
         created_at: serverTimestamp(),
         updated_at: serverTimestamp(),
       });
+      setCategories((prev) => [
+        newCat,
+        ...prev.filter((c) => c.id !== catId),
+      ]);
       return newCat;
     } catch (err) {
       handleFirestoreError(
@@ -573,6 +611,9 @@ export default function App() {
     catId: string,
     updates: Partial<RestaurantCategory>
   ) => {
+    setCategories((prev) =>
+      prev.map((c) => (c.id === catId ? { ...c, ...updates } : c))
+    );
     try {
       await updateDoc(doc(db, 'restaurant_categories', catId), {
         ...updates,
@@ -588,6 +629,7 @@ export default function App() {
   };
 
   const handleDeleteCategory = async (catId: string) => {
+    setCategories((prev) => prev.filter((c) => c.id !== catId));
     try {
       await deleteDoc(doc(db, 'restaurant_categories', catId));
     } catch (err) {
@@ -663,17 +705,36 @@ export default function App() {
       Math.max(1, Number(itemData.price) || 199)
     );
 
+    const newMenuItem: MenuItem = {
+      id: itemId,
+      restaurant_id: restId,
+      owner_uid: firebaseUser.uid,
+      category_id: (itemData.category_id || 'default').slice(0, 128),
+      name: safeName,
+      description: safeDesc,
+      price: safePrice,
+      category: safeCategory,
+      image_url: safeImage,
+      is_available: Boolean(itemData.is_available),
+    };
+
+    // Immediately update local UI state so the dish appears right away
+    setMenuItems((prev) => [
+      newMenuItem,
+      ...prev.filter((i) => i.id !== itemId),
+    ]);
+
     try {
       await setDoc(doc(db, 'menu_items', itemId), {
-        restaurant_id: restId,
-        owner_uid: firebaseUser.uid,
-        category_id: (itemData.category_id || 'default').slice(0, 128),
-        name: safeName,
-        description: safeDesc,
-        price: safePrice,
-        category: safeCategory,
-        image_url: safeImage,
-        is_available: Boolean(itemData.is_available),
+        restaurant_id: newMenuItem.restaurant_id,
+        owner_uid: newMenuItem.owner_uid,
+        category_id: newMenuItem.category_id,
+        name: newMenuItem.name,
+        description: newMenuItem.description,
+        price: newMenuItem.price,
+        category: newMenuItem.category,
+        image_url: newMenuItem.image_url,
+        is_available: newMenuItem.is_available,
         created_at: serverTimestamp(),
         updated_at: serverTimestamp(),
       });
@@ -686,6 +747,9 @@ export default function App() {
     itemId: string,
     updates: Partial<MenuItem>
   ) => {
+    setMenuItems((prev) =>
+      prev.map((i) => (i.id === itemId ? { ...i, ...updates } : i))
+    );
     try {
       await updateDoc(doc(db, 'menu_items', itemId), {
         ...updates,
@@ -697,6 +761,7 @@ export default function App() {
   };
 
   const handleDeleteMenuItem = async (itemId: string) => {
+    setMenuItems((prev) => prev.filter((i) => i.id !== itemId));
     try {
       await deleteDoc(doc(db, 'menu_items', itemId));
     } catch (err) {
@@ -736,6 +801,10 @@ export default function App() {
       restaurant_id: restId,
       owner_uid: firebaseUser.uid,
     };
+    setCoupons((prev) => [
+      newCoupon,
+      ...prev.filter((c) => c.id !== couponId),
+    ]);
     try {
       await setDoc(doc(db, 'coupons', couponId), {
         ...newCoupon,
@@ -748,6 +817,9 @@ export default function App() {
   };
 
   const handleToggleCoupon = async (couponId: string, active: boolean) => {
+    setCoupons((prev) =>
+      prev.map((c) => (c.id === couponId ? { ...c, active } : c))
+    );
     try {
       await updateDoc(doc(db, 'coupons', couponId), {
         active,
@@ -759,6 +831,7 @@ export default function App() {
   };
 
   const handleDeleteCoupon = async (couponId: string) => {
+    setCoupons((prev) => prev.filter((c) => c.id !== couponId));
     try {
       await deleteDoc(doc(db, 'coupons', couponId));
     } catch (err) {
@@ -846,14 +919,10 @@ export default function App() {
 
   if (!authReady || profileLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center gap-3">
-        <div className="w-16 h-16 rounded-3xl glass-elevated flex items-center justify-center shadow-lg shadow-rose-600/15 animate-pulse">
-          <BitQIcon className="w-11 h-11" />
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+        <div className="animate-pulse">
+          <BitQLogo size="lg" />
         </div>
-        <BitQLogo size="md" />
-        <p className="text-xs font-medium text-slate-500">
-          Preparing your BiteQ experience...
-        </p>
       </div>
     );
   }

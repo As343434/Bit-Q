@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import {
   MapPin,
   Search,
@@ -128,20 +129,24 @@ export const BitQLogo: React.FC<{
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }> = ({ size = 'md', className = '' }) => {
+  const boxDimensions =
+    size === 'lg'
+      ? 'w-16 h-16 rounded-3xl'
+      : size === 'sm'
+      ? 'w-10 h-10 rounded-2xl'
+      : 'w-12 h-12 rounded-2xl';
   const iconDimensions =
-    size === 'lg' ? 'w-12 h-12' : size === 'sm' ? 'w-8 h-8' : 'w-10 h-10';
-  const textSize =
-    size === 'lg' ? 'text-3xl' : size === 'sm' ? 'text-xl' : 'text-2xl';
+    size === 'lg' ? 'w-10 h-10' : size === 'sm' ? 'w-7 h-7' : 'w-8 h-8';
 
   return (
-    <span className={`inline-flex items-center gap-2 select-none ${className}`}>
+    <motion.span
+      whileHover={{ scale: 1.05, rotate: -2 }}
+      whileTap={{ scale: 0.96 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+      className={`inline-flex items-center justify-center glass-elevated shadow-sm shadow-rose-600/10 select-none ${boxDimensions} ${className}`}
+    >
       <BitQIcon className={`${iconDimensions} shrink-0`} />
-      <span
-        className={`${textSize} font-extrabold tracking-tight leading-none font-sans text-cherry-blue`}
-      >
-        BiteQ
-      </span>
-    </span>
+    </motion.span>
   );
 };
 
@@ -160,12 +165,17 @@ export const ResilientImage: React.FC<{
   if (hasError || !src || !src.trim() || src.trim() === '/favicon.svg') {
     return (
       <div
-        className={`flex flex-col items-center justify-center bg-gradient-to-br from-rose-500/10 via-slate-50 to-blue-600/10 text-slate-600 p-4 text-center ${className}`}
+        className={`flex items-center justify-center bg-gradient-to-br from-rose-500/12 via-white/80 to-blue-600/12 p-6 ${className}`}
       >
-        <BitQIcon className="w-8 h-8 mb-1.5 opacity-85" />
-        <span className="text-xs font-semibold text-slate-700 line-clamp-1">
-          {alt || 'BiteQ Kitchen'}
-        </span>
+        <motion.div
+          initial={{ scale: 0.92, opacity: 0.85 }}
+          animate={{ scale: 1, opacity: 1 }}
+          whileHover={{ scale: 1.08, rotate: -3 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+          className="w-14 h-14 rounded-2xl glass-elevated flex items-center justify-center shadow-sm"
+        >
+          <BitQIcon className="w-8 h-8" />
+        </motion.div>
       </div>
     );
   }
@@ -190,14 +200,19 @@ export const GlassCard: React.FC<{
 }> = ({ children, className = '', elevated = false, onClick }) => {
   const baseClass = elevated ? 'glass-elevated' : 'glass-surface';
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={onClick ? { y: -3, scale: 1.005 } : undefined}
+      whileTap={onClick ? { scale: 0.99 } : undefined}
+      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
       onClick={onClick}
-      className={`${baseClass} rounded-3xl transition-transform duration-150 ${
-        onClick ? 'cursor-pointer hover:-translate-y-0.5 active:scale-[0.99]' : ''
+      className={`${baseClass} rounded-3xl ${
+        onClick ? 'cursor-pointer' : ''
       } ${className}`}
     >
       {children}
-    </div>
+    </motion.div>
   );
 };
 
@@ -674,8 +689,18 @@ export const GlassModal: React.FC<{
 }> = ({ isOpen, onClose, title, children }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/40 backdrop-blur-sm animate-fadeIn">
-      <div className="glass-elevated rounded-3xl w-full max-w-lg p-6 md:p-8 max-h-[90vh] overflow-y-auto">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-950/40 backdrop-blur-sm"
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.94, y: 18 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 360, damping: 28 }}
+        className="glass-elevated rounded-3xl w-full max-w-lg p-6 md:p-8 max-h-[90vh] overflow-y-auto"
+      >
         <div className="flex items-center justify-between pb-4 mb-5 border-b border-stone-200/60">
           <h3 className="text-xl font-semibold text-stone-900 font-display">
             {title}
@@ -689,8 +714,8 @@ export const GlassModal: React.FC<{
           </button>
         </div>
         {children}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
 
@@ -703,8 +728,18 @@ export const GlassBottomSheet: React.FC<{
 }> = ({ isOpen, onClose, title, children }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-stone-950/40 backdrop-blur-sm">
-      <div className="glass-elevated rounded-t-3xl w-full max-w-2xl mx-auto p-6 pb-8 max-h-[85vh] overflow-y-auto">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex flex-col justify-end bg-stone-950/40 backdrop-blur-sm"
+    >
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        transition={{ type: 'spring', stiffness: 340, damping: 32 }}
+        className="glass-elevated rounded-t-3xl w-full max-w-2xl mx-auto p-6 pb-8 max-h-[85vh] overflow-y-auto"
+      >
         <div className="w-10 h-1.5 bg-stone-300 rounded-full mx-auto mb-4" />
         <div className="flex items-center justify-between pb-3 mb-4 border-b border-stone-200/60">
           <h3 className="text-lg font-semibold text-stone-900 font-display">
@@ -719,8 +754,8 @@ export const GlassBottomSheet: React.FC<{
           </button>
         </div>
         {children}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 };
 
@@ -973,10 +1008,13 @@ export const CategoryCard: React.FC<{
   onClick: () => void;
 }> = ({ label, subtitle, active, onClick }) => {
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onClick}
-      className={`min-h-[48px] px-4 py-2.5 rounded-2xl text-left transition-all duration-150 shrink-0 whitespace-nowrap ${
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.97 }}
+      transition={{ duration: 0.16 }}
+      className={`min-h-[48px] px-4 py-2.5 rounded-2xl text-left transition-colors duration-150 shrink-0 whitespace-nowrap ${
         active
           ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white shadow-md shadow-rose-600/20'
           : 'glass-surface text-slate-800 hover:bg-white/95'
@@ -992,7 +1030,7 @@ export const CategoryCard: React.FC<{
           {subtitle}
         </p>
       )}
-    </button>
+    </motion.button>
   );
 };
 
@@ -1006,7 +1044,13 @@ export const OfferCard: React.FC<{
 }> = ({ code, title, subtitle, activeCode, onApply }) => {
   const isApplied = activeCode?.toUpperCase() === code.toUpperCase();
   return (
-    <div className="glass-surface rounded-3xl p-5 min-w-[280px] md:min-w-[320px] flex flex-col justify-between gap-4">
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -3 }}
+      transition={{ duration: 0.22 }}
+      className="glass-surface rounded-3xl p-5 min-w-[280px] md:min-w-[320px] flex flex-col justify-between gap-4"
+    >
       <div>
         <div className="flex items-center justify-between gap-2 text-xs text-slate-500 mb-1.5">
           <span className="font-mono font-semibold text-rose-600">
@@ -1034,7 +1078,7 @@ export const OfferCard: React.FC<{
           {isApplied ? 'APPLIED ✓' : 'APPLY'}
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
@@ -1044,9 +1088,14 @@ export const RestaurantCard: React.FC<{
   onClick: () => void;
 }> = ({ restaurant, onClick }) => {
   return (
-    <article
+    <motion.article
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -4 }}
+      whileTap={{ scale: 0.99 }}
+      transition={{ duration: 0.22 }}
       onClick={onClick}
-      className={`glass-surface rounded-3xl overflow-hidden cursor-pointer group transition-transform duration-150 hover:-translate-y-0.5 flex flex-col ${
+      className={`glass-surface rounded-3xl overflow-hidden cursor-pointer group flex flex-col ${
         !restaurant.is_open ? 'opacity-65' : ''
       }`}
     >
@@ -1093,7 +1142,7 @@ export const RestaurantCard: React.FC<{
           <span className="tabular-nums shrink-0">{restaurant.distance}</span>
         </div>
       </div>
-    </article>
+    </motion.article>
   );
 };
 
@@ -1142,7 +1191,13 @@ export const FoodCard: React.FC<{
   onRemove: () => void;
 }> = ({ item, quantity, onAdd, onRemove }) => {
   return (
-    <div className="glass-surface rounded-3xl p-4 flex gap-4 items-center justify-between">
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -2 }}
+      transition={{ duration: 0.2 }}
+      className="glass-surface rounded-3xl p-4 flex gap-4 items-center justify-between"
+    >
       <div className="flex-1 min-w-0 pr-2">
         <div className="flex items-center gap-2 text-xs text-stone-500 mb-1">
           <span>{item.category}</span>
@@ -1196,7 +1251,7 @@ export const FoodCard: React.FC<{
           </span>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 };
 
@@ -1500,74 +1555,57 @@ export const NavigationBar: React.FC<{
             <BitQLogo size="sm" />
           </button>
 
-          {/* Zone 2: 5 Clean Text Navigation Links */}
+          {/* Zone 2: 5 Clean Text Navigation Links with Animated Active Indicator */}
           <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600">
-            <button
-              type="button"
-              onClick={() => onSelectTab('home')}
-              className={`py-1 transition-colors whitespace-nowrap ${
-                activeTab === 'home'
-                  ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-rose-600 decoration-2'
-                  : 'hover:text-slate-900'
-              }`}
-            >
-              Discover
-            </button>
-            <button
-              type="button"
-              onClick={() => onSelectTab('offers')}
-              className={`py-1 transition-colors whitespace-nowrap ${
-                activeTab === 'offers'
-                  ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-rose-600 decoration-2'
-                  : 'hover:text-slate-900'
-              }`}
-            >
-              Offers
-            </button>
-            <button
-              type="button"
-              onClick={() => onSelectTab('orders')}
-              className={`py-1 transition-colors whitespace-nowrap ${
-                activeTab === 'orders'
-                  ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-rose-600 decoration-2'
-                  : 'hover:text-slate-900'
-              }`}
-            >
-              Orders
-            </button>
-            <button
-              type="button"
-              onClick={() => onSelectTab('help')}
-              className={`py-1 transition-colors whitespace-nowrap ${
-                activeTab === 'help'
-                  ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-rose-600 decoration-2'
-                  : 'hover:text-slate-900'
-              }`}
-            >
-              Help Desk
-            </button>
-            <button
-              type="button"
-              onClick={() => onSelectTab('profile')}
-              className={`py-1 transition-colors whitespace-nowrap ${
-                activeTab === 'profile'
-                  ? 'text-slate-900 font-semibold underline underline-offset-8 decoration-rose-600 decoration-2'
-                  : 'hover:text-slate-900'
-              }`}
-            >
-              Profile
-            </button>
+            {(
+              [
+                { id: 'home', label: 'Discover' },
+                { id: 'offers', label: 'Offers' },
+                { id: 'orders', label: 'Orders' },
+                { id: 'help', label: 'Help Desk' },
+                { id: 'profile', label: 'Profile' },
+              ] as { id: CustomerTab; label: string }[]
+            ).map((nav) => {
+              const isActive = activeTab === nav.id;
+              return (
+                <button
+                  key={nav.id}
+                  type="button"
+                  onClick={() => onSelectTab(nav.id)}
+                  className={`relative py-1.5 transition-colors whitespace-nowrap ${
+                    isActive
+                      ? 'text-slate-900 font-semibold'
+                      : 'hover:text-slate-900'
+                  }`}
+                >
+                  <span>{nav.label}</span>
+                  {isActive && (
+                    <motion.span
+                      layoutId="customerTopNavUnderline"
+                      transition={{
+                        type: 'spring',
+                        stiffness: 420,
+                        damping: 30,
+                      }}
+                      className="absolute inset-x-0 -bottom-1 h-0.5 rounded-full bg-gradient-to-r from-rose-600 to-blue-600"
+                    />
+                  )}
+                </button>
+              );
+            })}
           </nav>
 
           {/* Zone 3: Primary Action (Cart Trigger) */}
           <div className="flex items-center gap-3">
-            <button
+            <motion.button
               type="button"
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
               onClick={() => onSelectTab('cart')}
               className="min-h-[42px] px-4 py-2 rounded-2xl bg-gradient-to-r from-rose-600 to-blue-600 text-white text-xs font-semibold hover:from-rose-500 hover:to-blue-500 shadow-sm shadow-rose-600/20 transition-all whitespace-nowrap tabular-nums"
             >
               Bag · {cartCount}
-            </button>
+            </motion.button>
           </div>
         </div>
       </header>

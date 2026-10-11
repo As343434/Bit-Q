@@ -224,8 +224,7 @@ service cloud.firestore {
     }
 
     match /restaurants/{restaurantId} {
-      allow get: if isSignedIn() && isValidId(restaurantId) && resource.data.name is string;
-      allow list: if isSignedIn() && resource.data.name is string;
+      allow get, list: if isSignedIn();
 
       allow create: if isVerified() &&
                     isValidId(restaurantId) &&
@@ -293,8 +292,7 @@ service cloud.firestore {
     }
 
     match /restaurant_categories/{categoryId} {
-      allow get: if isSignedIn() && isValidId(categoryId) && resource.data.name is string;
-      allow list: if isSignedIn() && resource.data.name is string;
+      allow get, list: if isSignedIn();
 
       allow create: if isVerified() &&
                     isValidId(categoryId) &&
@@ -366,8 +364,7 @@ service cloud.firestore {
     }
 
     match /menu_items/{itemId} {
-      allow get: if isSignedIn() && isValidId(itemId) && resource.data.name is string;
-      allow list: if isSignedIn() && resource.data.name is string;
+      allow get, list: if isSignedIn();
 
       allow create: if isVerified() &&
                     isValidId(itemId) &&
@@ -461,8 +458,7 @@ service cloud.firestore {
     }
 
     match /coupons/{couponId} {
-      allow get: if isSignedIn() && isValidId(couponId) && resource.data.code is string;
-      allow list: if isSignedIn() && resource.data.code is string;
+      allow get, list: if isSignedIn();
 
       allow create: if isVerified() &&
                     isValidId(couponId) &&
@@ -608,8 +604,7 @@ service cloud.firestore {
     }
 
     match /orders/{orderId} {
-      allow get: if isSignedIn() && isValidId(orderId) && resource.data.customer_uid is string;
-      allow list: if isSignedIn() && resource.data.customer_uid is string;
+      allow get, list: if isSignedIn();
 
       allow create: if isVerified() &&
                     isValidId(orderId) &&
