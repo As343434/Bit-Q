@@ -193,6 +193,7 @@ service cloud.firestore {
                'cuisine',
                'operating_hours',
                'rating',
+               'rating_count',
                'delivery_time',
                'distance',
                'price_indicator',
@@ -203,7 +204,6 @@ service cloud.firestore {
                'updated_at'
              ]) &&
              data.owner_uid is string && data.owner_uid.size() >= 1 && data.owner_uid.size() <= 128 &&
-             data.owner_uid == request.auth.uid &&
              data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
              data.owner_name is string && data.owner_name.size() >= 1 && data.owner_name.size() <= 100 &&
              data.contact_phone is string && data.contact_phone.size() >= 5 && data.contact_phone.size() <= 30 &&
@@ -213,6 +213,7 @@ service cloud.firestore {
              data.cuisine is string && data.cuisine.size() >= 1 && data.cuisine.size() <= 80 &&
              data.operating_hours is string && data.operating_hours.size() >= 1 && data.operating_hours.size() <= 80 &&
              data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+             (!('rating_count' in data) || (data.rating_count is number && data.rating_count >= 0)) &&
              data.delivery_time is string && data.delivery_time.size() >= 1 && data.delivery_time.size() <= 40 &&
              data.distance is string && data.distance.size() >= 1 && data.distance.size() <= 30 &&
              data.price_indicator is string && data.price_indicator.size() >= 1 && data.price_indicator.size() <= 10 &&
@@ -229,32 +230,39 @@ service cloud.firestore {
       allow create: if isVerified() &&
                     isValidId(restaurantId) &&
                     isValidRestaurant(incoming()) &&
+                    incoming().owner_uid == request.auth.uid &&
                     incoming().created_at == request.time &&
                     incoming().updated_at == request.time;
 
       allow update: if isVerified() &&
                     isValidId(restaurantId) &&
                     isValidRestaurant(incoming()) &&
-                    existing().owner_uid == request.auth.uid &&
                     incoming().owner_uid == existing().owner_uid &&
                     incoming().created_at == existing().created_at &&
-                    incoming().updated_at == request.time &&
-                    incoming().diff(existing()).affectedKeys().hasOnly([
-                      'name',
-                      'owner_name',
-                      'contact_phone',
-                      'location',
-                      'lat',
-                      'lng',
-                      'cuisine',
-                      'operating_hours',
-                      'delivery_time',
-                      'price_indicator',
-                      'offer_text',
-                      'image_url',
-                      'is_open',
-                      'updated_at'
-                    ]);
+                    incoming().updated_at == request.time && (
+                      (existing().owner_uid == request.auth.uid &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'name',
+                         'owner_name',
+                         'contact_phone',
+                         'location',
+                         'lat',
+                         'lng',
+                         'cuisine',
+                         'operating_hours',
+                         'delivery_time',
+                         'price_indicator',
+                         'offer_text',
+                         'image_url',
+                         'is_open',
+                         'updated_at'
+                       ])) ||
+                      incoming().diff(existing()).affectedKeys().hasOnly([
+                        'rating',
+                        'rating_count',
+                        'updated_at'
+                      ])
+                    );
     }
 
     // =========================================================================
@@ -692,7 +700,7 @@ service cloud.firestore {
                data.status == 'OPEN' ||
                data.status == 'IN_PROGRESS' ||
                data.status == 'RESOLVED'
-             ) &&
+             ) && I'm
              data.created_at is timestamp &&
              data.updated_at is timestamp;
     }
@@ -720,6 +728,91 @@ service cloud.firestore {
                       'message',
                       'updated_at'
                     ]);
+    }
+
+    // =========================================================================
+    // 9. STORE RATINGS (/store_ratings/{ratingId})
+    // =========================================================================
+    function isValidStoreRating(data) {
+      return data.keys().hasAll([
+               'order_id',
+               'restaurant_id',
+               'customer_uid',
+               'customer_name',
+               'rating',
+               'comment',
+               'created_at'
+             ]) &&
+             data.keys().hasOnly([
+               'id',
+               'order_id',
+               'restaurant_id',
+               'customer_uid',
+               'customer_name',
+               'rating',
+               'courier_rating',
+               'comment',
+               'created_at'
+             ]) &&
+             (!('id' in data) || (data.id is string && data.id.size() <= 128)) &&
+             data.order_id is string && data.order_id.size() >= 1 && data.order_id.size() <= 128 &&
+             data.restaurant_id is string && data.restaurant_id.size() >= 1 && data.restaurant_id.size() <= 128 &&
+             data.customer_uid is string && data.customer_uid == request.auth.uid &&
+             data.customer_name is string && data.customer_name.size() >= 1 && data.customer_name.size() <= 100 &&
+             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+             (!('courier_rating' in data) || (data.courier_rating is number && data.courier_rating >= 1 && data.courier_rating <= 5)) &&
+             data.comment is string && data.comment.size() <= 500 &&
+             data.created_at is timestamp;
+    }
+
+    match /store_ratings/{ratingId} {
+      allow get, list: if isSignedIn();
+      allow create: if isVerified() &&
+                    isValidId(ratingId) &&
+                    isValidStoreRating(incoming()) &&
+                    incoming().created_at == request.time;
+    }
+
+    // =========================================================================
+    // 10. REAL-TIME ORDER CHAT (/order_messages/{messageId})
+    // =========================================================================
+    function isValidOrderMessage(data) {
+      return data.keys().hasAll([
+               'order_id',
+               'sender_uid',
+               'sender_name',
+               'sender_role',
+               'text',
+               'created_at'
+             ]) &&
+             data.keys().hasOnly([
+               'id',
+               'order_id',
+               'sender_uid',
+               'sender_name',
+               'sender_role',
+               'text',
+               'created_at'
+             ]) &&
+             (!('id' in data) || (data.id is string && data.id.size() <= 128)) &&
+             data.order_id is string && data.order_id.size() >= 1 && data.order_id.size() <= 128 &&
+             data.sender_uid is string && data.sender_uid == request.auth.uid &&
+             data.sender_name is string && data.sender_name.size() >= 1 && data.sender_name.size() <= 100 &&
+             data.sender_role is string && (
+               data.sender_role == 'customer' ||
+               data.sender_role == 'restaurant_partner' ||
+               data.sender_role == 'delivery_partner'
+             ) &&
+             data.text is string && data.text.size() >= 1 && data.text.size() <= 500 &&
+             data.created_at is timestamp;
+    }
+
+    match /order_messages/{messageId} {
+      allow get, list: if isSignedIn();
+      allow create: if isVerified() &&
+                    isValidId(messageId) &&
+                    isValidOrderMessage(incoming()) &&
+                    incoming().created_at == request.time;
     }
   }
 }

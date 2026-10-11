@@ -42,8 +42,11 @@ import {
   SupportTicket,
   SupportCategory,
   GeoLocationData,
+  StoreRating,
+  OrderChatMessage,
 } from './types';
-import { BitQIcon, BitQLogo } from './components/GlassUI';
+import { buildDefaultRestaurantMenu } from './seedData';
+import { BitQLogo } from './components/GlassUI';
 import { LoginScreen, OnboardingScreen } from './components/AuthViews';
 import { CustomerExperience } from './components/CustomerViews';
 import {
@@ -67,6 +70,8 @@ export default function App() {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
+  const [storeRatings, setStoreRatings] = useState<StoreRating[]>([]);
+  const [orderMessages, setOrderMessages] = useState<OrderChatMessage[]>([]);
 
   // 1. Persistent Auth State Listener & Existing User Check
   useEffect(() => {
@@ -195,6 +200,30 @@ export default function App() {
       (err) => console.warn('Orders listener:', err)
     );
 
+    const unsubRatings = onSnapshot(
+      query(collection(db, 'store_ratings'), where('order_id', '>=', '')),
+      (snap) => {
+        const list: StoreRating[] = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<StoreRating, 'id'>),
+        }));
+        setStoreRatings(list);
+      },
+      (err) => console.warn('Ratings listener:', err)
+    );
+
+    const unsubMessages = onSnapshot(
+      query(collection(db, 'order_messages'), where('order_id', '>=', '')),
+      (snap) => {
+        const list: OrderChatMessage[] = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<OrderChatMessage, 'id'>),
+        }));
+        setOrderMessages(list);
+      },
+      (err) => console.warn('Order chat listener:', err)
+    );
+
     let unsubTickets = () => {};
     if (userProfile.role === 'customer') {
       const ticketsQuery = query(
@@ -220,6 +249,8 @@ export default function App() {
       unsubMenu();
       unsubCoupons();
       unsubOrders();
+      unsubRatings();
+      unsubMessages();
       unsubTickets();
     };
   }, [authReady, firebaseUser, userProfile]);
@@ -295,6 +326,29 @@ export default function App() {
           updated_at: serverTimestamp(),
         };
         await setDoc(doc(db, 'restaurants', restaurantId), restPayload);
+
+        // Automatically seed standard dish & price catalog in Firestore so no manual dish entry is needed
+        const defaultDishes = buildDefaultRestaurantMenu(restaurantId, uid);
+        setMenuItems((prev) => [...defaultDishes, ...prev]);
+        for (const dish of defaultDishes) {
+          try {
+            await setDoc(doc(db, 'menu_items', dish.id), {
+              restaurant_id: dish.restaurant_id,
+              owner_uid: dish.owner_uid,
+              category_id: dish.category_id || 'default',
+              name: dish.name,
+              description: dish.description,
+              price: dish.price,
+              category: dish.category,
+              image_url: dish.image_url,
+              is_available: dish.is_available,
+              created_at: serverTimestamp(),
+              updated_at: serverTimestamp(),
+            });
+          } catch {
+            // Ignore individual dish write warnings if rules restrict batching
+          }
+        }
       }
 
       const userDocPayload: Record<string, unknown> = {
@@ -917,6 +971,124 @@ export default function App() {
     setUserProfile(null);
   };
 
+  // Submit Store & Courier Rating -> Persists in /store_ratings and updates Restaurant's live rating
+  const handleSubmitStoreRating = async (payload: {
+    orderId: string;
+    restaurantId: string;
+    rating: number;
+    courierRating: number;
+    comment: string;
+  }) => {
+    if (!firebaseUser || !userProfile) return;
+    const ratingId = `rtg-${payload.orderId}`;
+    const newRating: StoreRating = {
+      id: ratingId,
+      order_id: payload.orderId,
+      restaurant_id: payload.restaurantId,
+      customer_uid: firebaseUser.uid,
+      customer_name: userProfile.name.slice(0, 100),
+      rating: payload.rating,
+      courier_rating: payload.courierRating,
+      comment: payload.comment.slice(0, 500),
+    };
+    setStoreRatings((prev) => [
+      newRating,
+      ...prev.filter((r) => r.id !== ratingId),
+    ]);
+
+    try {
+      await setDoc(doc(db, 'store_ratings', ratingId), {
+        order_id: newRating.order_id,
+        restaurant_id: newRating.restaurant_id,
+        customer_uid: newRating.customer_uid,
+        customer_name: newRating.customer_name,
+        rating: newRating.rating,
+        courier_rating: newRating.courier_rating,
+        comment: newRating.comment,
+        created_at: serverTimestamp(),
+      });
+
+      // Recalculate restaurant average store rating
+      const restRatings = [
+        ...storeRatings.filter(
+          (r) => r.restaurant_id === payload.restaurantId && r.id !== ratingId
+        ),
+        newRating,
+      ];
+      const avg = Number(
+        (
+          restRatings.reduce((acc, r) => acc + r.rating, 0) /
+          restRatings.length
+        ).toFixed(1)
+      );
+      setRestaurants((prev) =>
+        prev.map((r) =>
+          r.id === payload.restaurantId
+            ? { ...r, rating: avg, rating_count: restRatings.length }
+            : r
+        )
+      );
+      await updateDoc(doc(db, 'restaurants', payload.restaurantId), {
+        rating: avg,
+        rating_count: restRatings.length,
+        updated_at: serverTimestamp(),
+      });
+    } catch (err) {
+      console.warn('Store rating sync warning:', err);
+    }
+  };
+
+  // Send Real-Time Order Chat Message -> Persists in /order_messages in Firestore
+  const handleSendOrderMessage = async (orderId: string, text: string) => {
+    if (!firebaseUser || !userProfile) return;
+    const msgId = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const newMsg: OrderChatMessage = {
+      id: msgId,
+      order_id: orderId,
+      sender_uid: firebaseUser.uid,
+      sender_name: userProfile.name.slice(0, 100),
+      sender_role: userProfile.role,
+      text: text.slice(0, 500),
+    };
+    setOrderMessages((prev) => [...prev, newMsg]);
+    try {
+      await setDoc(doc(db, 'order_messages', msgId), {
+        order_id: newMsg.order_id,
+        sender_uid: newMsg.sender_uid,
+        sender_name: newMsg.sender_name,
+        sender_role: newMsg.sender_role,
+        text: newMsg.text,
+        created_at: serverTimestamp(),
+      });
+    } catch (err) {
+      console.warn('Order chat message warning:', err);
+    }
+  };
+
+  // Automatically merge standard dish & price catalog for any restaurant that has 0 custom dishes
+  const effectiveMenuItems = React.useMemo(() => {
+    const merged = [...menuItems];
+    for (const rest of restaurants) {
+      const hasDishes = merged.some((m) => m.restaurant_id === rest.id);
+      if (!hasDishes) {
+        merged.push(...buildDefaultRestaurantMenu(rest.id, rest.owner_uid));
+      }
+    }
+    if (
+      userProfile?.role === 'restaurant_partner' &&
+      userProfile.restaurant_id &&
+      !merged.some((m) => m.restaurant_id === userProfile.restaurant_id)
+    ) {
+      merged.push(
+        ...buildDefaultRestaurantMenu(
+          userProfile.restaurant_id,
+          userProfile.google_uid || userProfile.id
+        )
+      );
+    }
+    return merged;
+  }, [menuItems, restaurants, userProfile]);
+
   if (!authReady || profileLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
@@ -956,9 +1128,12 @@ export default function App() {
         user={userProfile}
         restaurant={myRestaurant}
         categories={categories}
-        menuItems={menuItems}
+        menuItems={effectiveMenuItems}
         coupons={coupons}
         orders={orders}
+        storeRatings={storeRatings}
+        orderMessages={orderMessages}
+        onSendOrderMessage={handleSendOrderMessage}
         onCreateOrUpdateRestaurant={handleCreateOrUpdateRestaurant}
         onCreateCategory={handleCreateCategory}
         onUpdateCategory={handleUpdateCategory}
@@ -980,6 +1155,8 @@ export default function App() {
       <DeliveryPartnerExperience
         user={userProfile}
         orders={orders}
+        orderMessages={orderMessages}
+        onSendOrderMessage={handleSendOrderMessage}
         onToggleOnline={(next) => handleUpdateUserProfile({ is_online: next })}
         onUpdateRange={(km) =>
           handleUpdateUserProfile({ delivery_range_km: km })
@@ -995,10 +1172,14 @@ export default function App() {
       user={userProfile}
       restaurants={restaurants}
       categories={categories}
-      menuItems={menuItems}
+      menuItems={effectiveMenuItems}
       coupons={coupons}
       orders={orders}
       supportTickets={supportTickets}
+      storeRatings={storeRatings}
+      orderMessages={orderMessages}
+      onSubmitStoreRating={handleSubmitStoreRating}
+      onSendOrderMessage={handleSendOrderMessage}
       onUpdateLocation={(loc, geo?: GeoLocationData) =>
         handleUpdateUserProfile({
           location: loc,

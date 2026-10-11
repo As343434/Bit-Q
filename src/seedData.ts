@@ -66,8 +66,84 @@ export const FOOD_CATEGORIES = [
   { id: 'Chinese', label: 'Chinese', subtitle: 'Wok & dim sum' },
 ];
 
+// Standard Dish & Price Catalog (Automatically available for restaurants so dish prices don't require manual entry)
+export const STANDARD_DISH_CATALOG: Array<{
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+}> = [
+  {
+    name: 'Margherita Burrata Artisan Pizza',
+    description: 'San Marzano tomato, fresh burrata, sweet basil, and cold-pressed olive oil on 48-hour sourdough crust.',
+    price: 389,
+    category: 'Pizza',
+  },
+  {
+    name: 'Smoked Pepperoni & Hot Honey Pizza',
+    description: 'Crisp wood-fired crust topped with artisanal pepperoni cups, mozzarella, and wildflower chili honey.',
+    price: 449,
+    category: 'Pizza',
+  },
+  {
+    name: 'Truffle Brioche Smash Burger',
+    description: 'Double-seared tender patty, aged cheddar, caramelized onions, and black truffle aioli on toasted brioche.',
+    price: 329,
+    category: 'Burgers',
+  },
+  {
+    name: 'Crispy Peri-Peri Crunch Burger',
+    description: 'Golden herb-crusted fillet, pickled jalapeños, crisp lettuce, and smoky peri-peri glaze.',
+    price: 279,
+    category: 'Burgers',
+  },
+  {
+    name: 'Royal Saffron Dum Biryani',
+    description: 'Slow-cooked aged basmati rice layered with aromatic spices, caramelized onions, mint, and saffron raita.',
+    price: 369,
+    category: 'Indian',
+  },
+  {
+    name: 'Old Delhi Paneer Makhani & Garlic Naan',
+    description: 'Velvety slow-simmered tomato-cashew gravy with char-grilled cottage cheese and buttered garlic naan.',
+    price: 319,
+    category: 'Indian',
+  },
+  {
+    name: 'Mediterranean Quinoa & Avocado Bowl',
+    description: 'Herbed tri-color quinoa, roasted chickpeas, Hass avocado, cherry tomatoes, and lemon-tahini dressing.',
+    price: 299,
+    category: 'Healthy',
+  },
+  {
+    name: 'Belgian Dark Chocolate Lava Torte',
+    description: 'Warm 70% dark couverture chocolate center served with Madagascar vanilla bean creme.',
+    price: 229,
+    category: 'Desserts',
+  },
+];
+
+export function buildDefaultRestaurantMenu(
+  restaurantId: string,
+  ownerUid: string
+): MenuItem[] {
+  return STANDARD_DISH_CATALOG.map((dish, idx) => ({
+    id: `std-${restaurantId}-${idx + 1}`,
+    restaurant_id: restaurantId,
+    owner_uid: ownerUid,
+    category_id: 'default',
+    name: dish.name,
+    description: dish.description,
+    price: dish.price,
+    category: dish.category,
+    image_url: '/favicon.svg',
+    is_available: true,
+  }));
+}
+
 // Clean launch-ready empty arrays — all live entities come strictly from Firestore
 export const SEED_COUPONS: Coupon[] = [];
 export const SEED_RESTAURANT_CATEGORIES: RestaurantCategory[] = [];
 export const SEED_RESTAURANTS: Restaurant[] = [];
 export const SEED_MENU_ITEMS: MenuItem[] = [];
+

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus,
   Edit3,
@@ -26,6 +26,8 @@ import {
   Coupon,
   Order,
   OrderStatus,
+  StoreRating,
+  OrderChatMessage,
 } from '../types';
 import {
   GlassCard,
@@ -37,6 +39,7 @@ import {
   ResilientImage,
   TimeSlotDialPicker,
   BitQLogo,
+  OrderChatPanel,
 } from './GlassUI';
 import { InteractiveRouteMap } from './InteractiveMap';
 
@@ -57,6 +60,9 @@ export const RestaurantPartnerExperience: React.FC<{
   menuItems: MenuItem[];
   coupons: Coupon[];
   orders: Order[];
+  storeRatings: StoreRating[];
+  orderMessages: OrderChatMessage[];
+  onSendOrderMessage: (orderId: string, text: string) => Promise<void>;
   onCreateOrUpdateRestaurant: (data: Partial<Restaurant>) => Promise<void>;
   onCreateCategory: (name: string) => Promise<RestaurantCategory | null>;
   onUpdateCategory: (
@@ -101,6 +107,9 @@ export const RestaurantPartnerExperience: React.FC<{
   menuItems,
   coupons,
   orders,
+  storeRatings,
+  orderMessages,
+  onSendOrderMessage,
   onCreateOrUpdateRestaurant,
   onCreateCategory,
   onUpdateCategory,
@@ -466,6 +475,15 @@ export const RestaurantPartnerExperience: React.FC<{
       </nav>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 space-y-8">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`rest-tab-${activeTab}`}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-8"
+          >
         {activeTab === 'dashboard' && (
           <section className="space-y-8 animate-fadeIn">
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -620,8 +638,60 @@ export const RestaurantPartnerExperience: React.FC<{
                             </span>
                           )}
                       </div>
+
+                      {order.status !== 'DELIVERED' &&
+                        order.status !== 'CANCELLED' && (
+                          <div className="pt-2">
+                            <OrderChatPanel
+                              orderId={order.id}
+                              currentUserRole="restaurant_partner"
+                              messages={orderMessages}
+                              onSendMessage={onSendOrderMessage}
+                            />
+                          </div>
+                        )}
                     </GlassCard>
                   ))}
+                </div>
+              )}
+            </div>
+
+            {/* Store Ratings & Guest Reviews Summary */}
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-stone-900 font-display">
+                Store Ratings & Guest Reviews (
+                {
+                  storeRatings.filter(
+                    (r) => r.restaurant_id === myRestaurantId
+                  ).length
+                }
+                )
+              </h2>
+              {storeRatings.filter((r) => r.restaurant_id === myRestaurantId)
+                .length === 0 ? (
+                <GlassCard className="p-6 text-center text-xs text-stone-500">
+                  Customer ratings and reviews for your restaurant will appear here automatically.
+                </GlassCard>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {storeRatings
+                    .filter((r) => r.restaurant_id === myRestaurantId)
+                    .map((rtg) => (
+                      <GlassCard key={rtg.id} className="p-4 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-stone-900">
+                            {rtg.customer_name}
+                          </span>
+                          <span className="inline-flex items-center gap-1 font-bold text-rose-600">
+                            <Star className="w-3.5 h-3.5 fill-rose-600 text-rose-600" />
+                            {rtg.rating.toFixed(1)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-stone-600">
+                          "{rtg.comment}"
+                        </p>
+                      </GlassCard>
+                    ))}
                 </div>
               )}
             </div>
@@ -1218,6 +1288,8 @@ export const RestaurantPartnerExperience: React.FC<{
             </GlassCard>
           </section>
         )}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       {/* Add / Edit Dish Modal with Image URL Input, Live Preview & Custom Categories */}
@@ -1387,6 +1459,8 @@ type DeliveryTab = 'dashboard' | 'active' | 'earnings' | 'profile';
 export const DeliveryPartnerExperience: React.FC<{
   user: UserProfile;
   orders: Order[];
+  orderMessages: OrderChatMessage[];
+  onSendOrderMessage: (orderId: string, text: string) => Promise<void>;
   onToggleOnline: (isOnline: boolean) => Promise<void>;
   onUpdateRange: (rangeKm: number) => Promise<void>;
   onAdvanceDeliveryState: (
@@ -1398,6 +1472,8 @@ export const DeliveryPartnerExperience: React.FC<{
 }> = ({
   user,
   orders,
+  orderMessages,
+  onSendOrderMessage,
   onToggleOnline,
   onUpdateRange,
   onAdvanceDeliveryState,
@@ -1669,6 +1745,15 @@ export const DeliveryPartnerExperience: React.FC<{
       </nav>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 space-y-8">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`courier-tab-${activeTab}`}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-8"
+          >
         {/* DISPATCH RADAR TAB */}
         {activeTab === 'dashboard' && (
           <section className="space-y-8 animate-fadeIn">
@@ -1991,6 +2076,13 @@ export const DeliveryPartnerExperience: React.FC<{
                       {renderCourierNextActionButton(activeDelivery)}
                     </div>
                   </GlassCard>
+
+                  <OrderChatPanel
+                    orderId={activeDelivery.id}
+                    currentUserRole="delivery_partner"
+                    messages={orderMessages}
+                    onSendMessage={onSendOrderMessage}
+                  />
                 </div>
               </div>
             )}
@@ -2174,6 +2266,8 @@ export const DeliveryPartnerExperience: React.FC<{
             </GlassCard>
           </section>
         )}
+          </motion.div>
+        </AnimatePresence>
       </main>
     </div>
   );

@@ -24,7 +24,10 @@ import {
   Order,
   OrderStatus,
   UserProfile,
+  UserRole,
   GeoLocationData,
+  OrderChatMessage,
+  StoreRating,
 } from '../types';
 import { POPULAR_LOCATIONS_DATA } from '../seedData';
 
@@ -34,7 +37,8 @@ export const BitQIcon: React.FC<{
   monochrome?: boolean;
 }> = ({ className = 'w-9 h-9', monochrome = false }) => {
   const gradId = React.useId();
-  const strokeColor = monochrome ? 'currentColor' : `url(#${gradId})`;
+  const qArcColor = monochrome ? 'currentColor' : `url(#${gradId})`;
+  const utensilColor = monochrome ? 'currentColor' : '#111111';
   return (
     <svg
       viewBox="480 235 435 530"
@@ -62,25 +66,25 @@ export const BitQIcon: React.FC<{
       {/* Speech Bubble Q Outer Arc (Top-Left Segment) */}
       <path
         d="M 592 633 A 174 174 0 0 1 756 330"
-        stroke={strokeColor}
+        stroke={qArcColor}
         strokeWidth="24"
         strokeLinecap="round"
       />
       {/* Speech Bubble Q Outer Arc + Pointer Tail (Bottom-Right Segment) */}
       <path
         d="M 803 351 A 174 174 0 0 1 857 581 L 873 706 L 765 656 A 174 174 0 0 1 634 656"
-        stroke={strokeColor}
+        stroke={qArcColor}
         strokeWidth="24"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      {/* Diagonal Spoon (Top-Right Handle to Solid Bowl) */}
+      {/* Diagonal Spoon (Top-Right Handle to Solid Bowl) — Black */}
       <line
         x1="806"
         y1="268"
         x2="676"
         y2="438"
-        stroke={strokeColor}
+        stroke={utensilColor}
         strokeWidth="24"
         strokeLinecap="round"
       />
@@ -91,23 +95,23 @@ export const BitQIcon: React.FC<{
           width="84"
           height="112"
           rx="42"
-          fill={strokeColor}
+          fill={utensilColor}
         />
       </g>
-      {/* Diagonal Fork (Bottom-Left Handle + Hollow Ring Head + 3 Tines) */}
+      {/* Diagonal Fork (Bottom-Left Handle + Hollow Ring Head + 3 Tines) — Black */}
       <line
         x1="581"
         y1="732"
         x2="686"
         y2="592"
-        stroke={strokeColor}
+        stroke={utensilColor}
         strokeWidth="24"
         strokeLinecap="round"
       />
       <g transform="translate(706 565) rotate(37)">
         <path
           d="M -30 0 A 30 30 0 0 0 30 0 L 30 -72 M 0 -30 L 0 -72 M -30 0 L -30 -72"
-          stroke={strokeColor}
+          stroke={utensilColor}
           strokeWidth="20"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -116,7 +120,7 @@ export const BitQIcon: React.FC<{
           cx="0"
           cy="0"
           r="29"
-          stroke={strokeColor}
+          stroke={utensilColor}
           strokeWidth="20"
           fill="none"
         />
@@ -246,16 +250,19 @@ export const GlassButton: React.FC<{
   };
 
   return (
-    <button
+    <motion.button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`min-h-[48px] px-5 py-2.5 rounded-2xl font-semibold text-sm inline-flex items-center justify-center gap-2 whitespace-nowrap shrink-0 transition-all duration-150 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 disabled:opacity-50 disabled:pointer-events-none ${
+      whileHover={disabled ? undefined : { y: -1.5, scale: 1.01 }}
+      whileTap={disabled ? undefined : { scale: 0.97 }}
+      transition={{ type: 'spring', stiffness: 420, damping: 24 }}
+      className={`min-h-[48px] px-5 py-2.5 rounded-2xl font-semibold text-sm inline-flex items-center justify-center gap-2 whitespace-nowrap shrink-0 transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 disabled:opacity-50 disabled:pointer-events-none ${
         variantStyles[variant]
       } ${fullWidth ? 'w-full' : ''} ${className}`}
     >
       {children}
-    </button>
+    </motion.button>
   );
 };
 
@@ -1319,14 +1326,20 @@ export const StatusTimeline: React.FC<{ currentStatus: OrderStatus }> = ({
         const isCompleted = index <= currentIndex;
         const isCurrent = index === currentIndex;
         return (
-          <div key={step.label} className="flex items-start gap-3.5">
+          <motion.div
+            key={step.label}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.25, delay: index * 0.05 }}
+            className="flex items-start gap-3.5"
+          >
             <div className="flex flex-col items-center">
               <div
                 className={`w-6 h-6 rounded-full flex items-center justify-center text-xs transition-colors ${
                   isCompleted
                     ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white'
                     : 'bg-slate-200 text-slate-500'
-                } ${isCurrent ? 'ring-4 ring-rose-500/20' : ''}`}
+                } ${isCurrent ? 'ring-4 ring-rose-500/20 animate-pulse' : ''}`}
               >
                 {isCompleted ? <Check className="w-3.5 h-3.5" /> : index + 1}
               </div>
@@ -1354,7 +1367,7 @@ export const StatusTimeline: React.FC<{ currentStatus: OrderStatus }> = ({
               </p>
               <p className="text-xs text-slate-500">{step.detail}</p>
             </div>
-          </div>
+          </motion.div>
         );
       })}
     </div>
@@ -1369,7 +1382,13 @@ export const OrderCard: React.FC<{
 }> = ({ order, onTrack, actionSlot }) => {
   const statusFormatted = order.status.replace(/_/g, ' ');
   return (
-    <div className="glass-surface rounded-3xl p-5 space-y-4">
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -3 }}
+      transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+      className="glass-surface rounded-3xl p-5 space-y-4"
+    >
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 text-xs text-stone-500">
@@ -1421,7 +1440,7 @@ export const OrderCard: React.FC<{
           {actionSlot}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
@@ -1440,10 +1459,12 @@ export const StatusToggle: React.FC<{
   mode = 'courier',
 }) => {
   return (
-    <button
+    <motion.button
       type="button"
+      whileHover={{ scale: 1.03 }}
+      whileTap={{ scale: 0.96 }}
       onClick={() => onToggle(!isOnline)}
-      className={`min-h-[44px] px-4 py-2 rounded-2xl flex items-center gap-2.5 transition-all duration-150 ${
+      className={`min-h-[44px] px-4 py-2 rounded-2xl flex items-center gap-2.5 transition-colors duration-150 ${
         isOnline
           ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white shadow-md shadow-rose-600/20'
           : mode === 'kitchen'
@@ -1463,7 +1484,7 @@ export const StatusToggle: React.FC<{
       <span className="text-xs font-semibold tracking-wide whitespace-nowrap">
         {isOnline ? onlineLabel : offlineLabel}
       </span>
-    </button>
+    </motion.button>
   );
 };
 
@@ -1480,17 +1501,22 @@ export const ProfileCard: React.FC<{
       : 'Customer Member';
 
   return (
-    <div className="glass-surface rounded-3xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+      className="glass-elevated rounded-3xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-5"
+    >
       <div className="flex items-center gap-4">
         {user.profile_image ? (
           <img
             src={user.profile_image}
             alt={user.name}
             referrerPolicy="no-referrer"
-            className="w-16 h-16 rounded-2xl object-cover border border-white"
+            className="w-16 h-16 rounded-2xl object-cover border border-white shadow-sm"
           />
         ) : (
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-rose-600 to-blue-600 text-white flex items-center justify-center text-xl font-semibold font-display">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-rose-600 to-blue-600 text-white flex items-center justify-center text-xl font-semibold font-display shadow-sm">
             {user.name.charAt(0).toUpperCase()}
           </div>
         )}
@@ -1509,7 +1535,7 @@ export const ProfileCard: React.FC<{
       <GlassButton variant="secondary" onClick={onLogout}>
         Sign Out
       </GlassButton>
-    </div>
+    </motion.div>
   );
 };
 
@@ -1637,3 +1663,265 @@ export const NavigationBar: React.FC<{
     </>
   );
 };
+
+/* 19. OrderChatPanel — Real-Time Firestore Order Chat with 1-Tap Quick Messages */
+export const OrderChatPanel: React.FC<{
+  orderId: string;
+  currentUserRole: UserRole;
+  messages: OrderChatMessage[];
+  onSendMessage: (orderId: string, text: string) => Promise<void>;
+}> = ({ orderId, currentUserRole, messages, onSendMessage }) => {
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const quickReplies =
+    currentUserRole === 'customer'
+      ? [
+          'Please pack extra cutlery & napkins',
+          'Call me when arriving at the gate',
+          'How is my order preparation going?',
+        ]
+      : currentUserRole === 'restaurant_partner'
+      ? [
+          'Your dish is being freshly prepared now',
+          'Order is packed & ready for courier pickup',
+          'Added complimentary chef garnish!',
+        ]
+      : [
+          'Picked up your order, heading your way!',
+          'Arriving at your location in 2 minutes',
+          'Reached the main entrance gate',
+        ];
+
+  const orderMessages = messages.filter((m) => m.order_id === orderId);
+
+  const handleSend = async (textToSend: string) => {
+    const clean = textToSend.trim();
+    if (!clean || sending) return;
+    setSending(true);
+    try {
+      await onSendMessage(orderId, clean);
+      setDraft('');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="glass-surface rounded-3xl p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="text-sm font-semibold text-slate-900 font-display">
+            Live Order Chat
+          </h4>
+          <p className="text-[11px] text-slate-500">
+            Synced in real time across Customer, Kitchen & Courier
+          </p>
+        </div>
+        <span className="text-[11px] font-mono text-rose-600 font-semibold">
+          ● Live
+        </span>
+      </div>
+
+      {/* 1-Tap Quick Replies (No manual typing needed) */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        {quickReplies.map((preset) => (
+          <button
+            key={preset}
+            type="button"
+            disabled={sending}
+            onClick={() => handleSend(preset)}
+            className="px-3 py-1.5 rounded-xl bg-white/90 hover:bg-white border border-slate-200/80 text-[11px] font-medium text-slate-700 hover:text-rose-600 transition-colors whitespace-nowrap shrink-0"
+          >
+            + {preset}
+          </button>
+        ))}
+      </div>
+
+      {/* Messages Feed */}
+      <div className="max-h-48 overflow-y-auto space-y-2.5 pr-1">
+        {orderMessages.length === 0 ? (
+          <p className="text-xs text-slate-400 py-3 text-center">
+            Tap any quick message above or type a note to start live order chat.
+          </p>
+        ) : (
+          orderMessages.map((msg) => {
+            const isMine = msg.sender_role === currentUserRole;
+            const roleBadge =
+              msg.sender_role === 'restaurant_partner'
+                ? 'Kitchen'
+                : msg.sender_role === 'delivery_partner'
+                ? 'Courier'
+                : 'Guest';
+            return (
+              <div
+                key={msg.id}
+                className={`flex flex-col ${
+                  isMine ? 'items-end' : 'items-start'
+                }`}
+              >
+                <span className="text-[10px] text-slate-400 px-1 mb-0.5">
+                  {msg.sender_name} · {roleBadge}
+                </span>
+                <div
+                  className={`px-3.5 py-2 rounded-2xl text-xs max-w-[85%] ${
+                    isMine
+                      ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white'
+                      : 'bg-white border border-slate-200/80 text-slate-800'
+                  }`}
+                >
+                  {msg.text}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleSend(draft);
+        }}
+        className="flex gap-2"
+      >
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Message kitchen or courier..."
+          maxLength={300}
+          className="flex-1 min-h-[42px] px-3.5 py-2 rounded-2xl bg-white border border-slate-200 text-xs focus:outline-none focus:border-rose-600"
+        />
+        <GlassButton
+          type="submit"
+          variant="primary"
+          disabled={sending || !draft.trim()}
+          className="min-h-[42px] px-4 py-1.5 text-xs"
+        >
+          Send
+        </GlassButton>
+      </form>
+    </div>
+  );
+};
+
+/* 20. StoreRatingBox — 1-Tap Store & Courier Rating Component */
+export const StoreRatingBox: React.FC<{
+  order: Order;
+  existingRating?: StoreRating;
+  onSubmitRating: (payload: {
+    orderId: string;
+    restaurantId: string;
+    rating: number;
+    courierRating: number;
+    comment: string;
+  }) => Promise<void>;
+}> = ({ order, existingRating, onSubmitRating }) => {
+  const [stars, setStars] = useState(existingRating?.rating || 5);
+  const [courierStars, setCourierStars] = useState(
+    existingRating?.courier_rating || 5
+  );
+  const [comment, setComment] = useState(existingRating?.comment || '');
+  const [submitting, setSubmitting] = useState(false);
+
+  if (existingRating) {
+    return (
+      <div className="pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs">
+        <span className="text-slate-600 font-medium">
+          Your Store Rating:{' '}
+          <strong className="text-rose-600">{existingRating.rating} ★</strong>
+          {existingRating.comment ? ` · "${existingRating.comment}"` : ''}
+        </span>
+        <span className="text-emerald-800 font-semibold">✓ Saved</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pt-3 border-t border-slate-200/60 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-slate-800">
+          Rate {order.restaurant_name}
+        </span>
+        <div className="inline-flex items-center gap-1">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setStars(n)}
+              className="p-1 rounded-lg hover:bg-rose-50 transition-colors"
+            >
+              <Star
+                className={`w-4 h-4 ${
+                  n <= stars
+                    ? 'fill-rose-600 text-rose-600'
+                    : 'text-slate-300'
+                }`}
+              />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {order.delivery_partner_name && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs text-slate-600">
+            Rate Courier ({order.delivery_partner_name})
+          </span>
+          <div className="inline-flex items-center gap-1">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setCourierStars(n)}
+                className="p-1 rounded-lg hover:bg-blue-50 transition-colors"
+              >
+                <Star
+                  className={`w-3.5 h-3.5 ${
+                    n <= courierStars
+                      ? 'fill-blue-600 text-blue-600'
+                      : 'text-slate-300'
+                  }`}
+                />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="Optional review note (e.g. Fresh & hot!)"
+          maxLength={200}
+          className="flex-1 min-h-[38px] px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs focus:outline-none focus:border-rose-600"
+        />
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={async () => {
+            setSubmitting(true);
+            try {
+              await onSubmitRating({
+                orderId: order.id,
+                restaurantId: order.restaurant_id,
+                rating: stars,
+                courierRating: courierStars,
+                comment: comment.trim() || 'Great food & service!',
+              });
+            } finally {
+              setSubmitting(false);
+            }
+          }}
+          className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-blue-600 text-white text-xs font-semibold shadow-sm disabled:opacity-50"
+        >
+          {submitting ? 'Saving...' : 'Submit ★'}
+        </button>
+      </div>
+    </div>
+  );
+};
+

@@ -24,6 +24,8 @@ import {
   SupportTicket,
   SupportCategory,
   GeoLocationData,
+  StoreRating,
+  OrderChatMessage,
 } from '../types';
 import { FOOD_CATEGORIES } from '../seedData';
 import {
@@ -44,6 +46,8 @@ import {
   NavigationBar,
   CustomerTab,
   ResilientImage,
+  OrderChatPanel,
+  StoreRatingBox,
 } from './GlassUI';
 import { InteractiveRouteMap } from './InteractiveMap';
 
@@ -55,6 +59,16 @@ export const CustomerExperience: React.FC<{
   coupons: Coupon[];
   orders: Order[];
   supportTickets: SupportTicket[];
+  storeRatings: StoreRating[];
+  orderMessages: OrderChatMessage[];
+  onSubmitStoreRating: (payload: {
+    orderId: string;
+    restaurantId: string;
+    rating: number;
+    courierRating: number;
+    comment: string;
+  }) => Promise<void>;
+  onSendOrderMessage: (orderId: string, text: string) => Promise<void>;
   onUpdateLocation: (loc: string, geo?: GeoLocationData) => Promise<void>;
   onUpdateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   onPlaceOrder: (orderPayload: {
@@ -82,6 +96,10 @@ export const CustomerExperience: React.FC<{
   coupons,
   orders,
   supportTickets,
+  storeRatings,
+  orderMessages,
+  onSubmitStoreRating,
+  onSendOrderMessage,
   onUpdateLocation,
   onUpdateProfile,
   onPlaceOrder,
@@ -398,7 +416,16 @@ export const CustomerExperience: React.FC<{
   };
 
   return (
-    <div className="min-h-screen pb-24 md:pb-16">
+    <div className="min-h-screen pb-24 md:pb-16 relative">
+      {/* Subtle Ambient Floating Lighting */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 overflow-hidden -z-10"
+      >
+        <div className="absolute -top-36 -left-36 w-[440px] h-[440px] rounded-full bg-rose-500/8 blur-3xl animate-float" />
+        <div className="absolute top-1/3 -right-36 w-[440px] h-[440px] rounded-full bg-blue-600/8 blur-3xl animate-float-delayed" />
+      </div>
+
       <NavigationBar
         activeTab={activeTab}
         onSelectTab={(tab) => {
@@ -412,9 +439,17 @@ export const CustomerExperience: React.FC<{
       />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 space-y-10">
+        <AnimatePresence mode="wait">
         {/* LIVE ORDER TRACKING WITH INTERACTIVE LEAFLET ROUTE MAP */}
         {liveTrackedOrder ? (
-          <section className="space-y-6 animate-fadeIn">
+          <motion.section
+            key={`track-${liveTrackedOrder.id}`}
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-6"
+          >
             <div className="flex items-center justify-between">
               <button
                 type="button"
@@ -519,13 +554,35 @@ export const CustomerExperience: React.FC<{
                       <span>₹{liveTrackedOrder.total.toFixed(0)}</span>
                     </div>
                   </div>
+
+                  <StoreRatingBox
+                    order={liveTrackedOrder}
+                    existingRating={storeRatings.find(
+                      (r) => r.order_id === liveTrackedOrder.id
+                    )}
+                    onSubmitRating={onSubmitStoreRating}
+                  />
                 </GlassCard>
+
+                <OrderChatPanel
+                  orderId={liveTrackedOrder.id}
+                  currentUserRole="customer"
+                  messages={orderMessages}
+                  onSendMessage={onSendOrderMessage}
+                />
               </div>
             </div>
-          </section>
+          </motion.section>
         ) : selectedRestaurant ? (
           /* RESTAURANT DETAIL PAGE */
-          <section className="space-y-8 animate-fadeIn">
+          <motion.section
+            key={`rest-${selectedRestaurant.id}`}
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            className="space-y-8"
+          >
             <button
               type="button"
               onClick={() => {
@@ -659,9 +716,15 @@ export const CustomerExperience: React.FC<{
                 </div>
               </div>
             )}
-          </section>
+          </motion.section>
         ) : (
-          <>
+          <motion.div
+            key={`tab-${activeTab}`}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+          >
             {/* HOME DISCOVERY VIEW */}
             {activeTab === 'home' && (
               <motion.div
@@ -1189,7 +1252,18 @@ export const CustomerExperience: React.FC<{
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {pastOrders.map((order) => (
-                        <OrderCard key={order.id} order={order} />
+                        <div key={order.id} className="space-y-2">
+                          <OrderCard order={order} />
+                          <div className="glass-surface rounded-2xl px-4 pb-3">
+                            <StoreRatingBox
+                              order={order}
+                              existingRating={storeRatings.find(
+                                (r) => r.order_id === order.id
+                              )}
+                              onSubmitRating={onSubmitStoreRating}
+                            />
+                          </div>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -1402,8 +1476,9 @@ export const CustomerExperience: React.FC<{
                 </GlassCard>
               </section>
             )}
-          </>
+          </motion.div>
         )}
+        </AnimatePresence>
       </main>
     </div>
   );

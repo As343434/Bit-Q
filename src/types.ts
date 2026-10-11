@@ -50,6 +50,7 @@ export interface Restaurant {
   cuisine: string;
   operating_hours: string;
   rating: number;
+  rating_count?: number;
   delivery_time: string;
   distance: string;
   price_indicator: string;
@@ -185,3 +186,26 @@ export interface SupportTicket {
   created_at?: unknown;
   updated_at?: unknown;
 }
+
+export interface StoreRating {
+  id: string;
+  order_id: string;
+  restaurant_id: string;
+  customer_uid: string;
+  customer_name: string;
+  rating: number;
+  courier_rating?: number;
+  comment: string;
+  created_at?: unknown;
+}
+
+export interface OrderChatMessage {
+  id: string;
+  order_id: string;
+  sender_uid: string;
+  sender_name: string;
+  sender_role: UserRole;
+  text: string;
+  created_at?: unknown;
+}
+

@@ -21,13 +21,13 @@
     stroke-linecap="round"
     stroke-linejoin="round"
   />
-  <!-- Diagonal Spoon (Top-Right Handle to Solid Bowl) -->
+  <!-- Diagonal Spoon (Top-Right Handle to Solid Bowl) in Black -->
   <line
     x1="806"
     y1="268"
     x2="676"
     y2="438"
-    stroke="url(#cherryBlueGrad)"
+    stroke="#111111"
     stroke-width="22"
     stroke-linecap="round"
   />
@@ -38,23 +38,23 @@
       width="84"
       height="112"
       rx="42"
-      fill="url(#cherryBlueGrad)"
+      fill="#111111"
     />
   </g>
-  <!-- Diagonal Fork (Bottom-Left Handle + Hollow Ring Head + 3 Tines) -->
+  <!-- Diagonal Fork (Bottom-Left Handle + Hollow Ring Head + 3 Tines) in Black -->
   <line
     x1="581"
     y1="732"
     x2="686"
     y2="592"
-    stroke="url(#cherryBlueGrad)"
+    stroke="#111111"
     stroke-width="22"
     stroke-linecap="round"
   />
   <g transform="translate(706 565) rotate(37)">
     <path
       d="M -30 0 A 30 30 0 0 0 30 0 L 30 -72 M 0 -30 L 0 -72 M -30 0 L -30 -72"
-      stroke="url(#cherryBlueGrad)"
+      stroke="#111111"
       stroke-width="18"
       stroke-linecap="round"
       stroke-linejoin="round"
@@ -63,7 +63,7 @@
       cx="0"
       cy="0"
       r="29"
-      stroke="url(#cherryBlueGrad)"
+      stroke="#111111"
       stroke-width="18"
       fill="none"
     />
