@@ -190,6 +190,10 @@
           "type": "number",
           "description": "Average guest rating (1.0 to 5.0)"
         },
+        "rating_count": {
+          "type": "number",
+          "description": "Total number of guest ratings"
+        },
         "delivery_time": {
           "type": "string",
           "description": "Estimated delivery window",
@@ -597,6 +601,84 @@
         }
       },
       "required": ["user_uid", "category", "order_id", "subject", "message", "status", "created_at", "updated_at"]
+    },
+    "StoreRating": {
+      "title": "StoreRating",
+      "description": "Customer rating and review for a restaurant and courier.",
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "restaurant_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "customer_uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "customer_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "rating": {
+          "type": "number"
+        },
+        "courier_rating": {
+          "type": "number"
+        },
+        "comment": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["order_id", "restaurant_id", "customer_uid", "customer_name", "rating", "comment", "created_at"]
+    },
+    "OrderChatMessage": {
+      "title": "OrderChatMessage",
+      "description": "Real-time order chat message between Customer, Restaurant Partner, and Delivery Partner.",
+      "type": "object",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "sender_uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "sender_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "sender_role": {
+          "type": "string",
+          "enum": ["customer", "restaurant_partner", "delivery_partner"]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["order_id", "sender_uid", "sender_name", "sender_role", "text", "created_at"]
     }
   },
   "firestore": {
@@ -627,6 +709,14 @@
     "/support_tickets/{ticketId}": {
       "schema": { "$ref": "#/entities/SupportTicket" },
       "description": "Customer help desk tickets"
+    },
+    "/store_ratings/{ratingId}": {
+      "schema": { "$ref": "#/entities/StoreRating" },
+      "description": "Store and courier ratings submitted by customers"
+    },
+    "/order_messages/{messageId}": {
+      "schema": { "$ref": "#/entities/OrderChatMessage" },
+      "description": "Real-time order chat messages"
     }
   }
 }

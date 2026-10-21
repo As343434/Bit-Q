@@ -29,6 +29,7 @@ import {
   StoreRating,
   OrderChatMessage,
 } from '../types';
+import { STANDARD_DISH_CATALOG } from '../seedData';
 import {
   GlassCard,
   GlassButton,
@@ -1299,6 +1300,38 @@ export const RestaurantPartnerExperience: React.FC<{
         title={editingItem ? 'Edit Menu Dish' : 'Add Dish to Menu'}
       >
         <form onSubmit={handleSaveMenuItem} className="space-y-4">
+          {!editingItem && (
+            <div className="p-3.5 rounded-2xl bg-rose-500/5 border border-rose-500/15 space-y-1.5">
+              <label className="text-xs font-semibold text-slate-800 block">
+                Auto-Fill from Standard Dish & Price Catalog (Optional)
+              </label>
+              <select
+                defaultValue=""
+                onChange={(e) => {
+                  const chosen = STANDARD_DISH_CATALOG.find(
+                    (d) => d.name === e.target.value
+                  );
+                  if (chosen) {
+                    setItemName(chosen.name);
+                    setItemPrice(String(chosen.price));
+                    setItemCategory(chosen.category);
+                    setItemDesc(chosen.description);
+                  }
+                }}
+                className="w-full min-h-[42px] px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-rose-600"
+              >
+                <option value="">
+                  Select a pre-priced dish template or type custom below...
+                </option>
+                {STANDARD_DISH_CATALOG.map((d) => (
+                  <option key={d.name} value={d.name}>
+                    {d.name} — ₹{d.price} ({d.category})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <GlassInput
             label="Dish Name"
             value={itemName}

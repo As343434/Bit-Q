@@ -700,7 +700,7 @@ service cloud.firestore {
                data.status == 'OPEN' ||
                data.status == 'IN_PROGRESS' ||
                data.status == 'RESOLVED'
-             ) && I'm
+             ) &&
              data.created_at is timestamp &&
              data.updated_at is timestamp;
     }
