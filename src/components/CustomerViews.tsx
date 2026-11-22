@@ -531,44 +531,6 @@ export const CustomerExperience: React.FC<{
                   etaText={liveTrackedOrder.estimated_arrival}
                   distanceKm={liveTrackedOrder.distance_km}
                   statusLabel={liveTrackedOrder.status.replace(/_/g, ' ')}
-                  onUpdateCoords={(coords, eta) => {
-                    if (liveTrackedOrder.id === 'demo-biteq-2026') {
-                      setTrackingOrder((prev) =>
-                        prev
-                          ? {
-                              ...prev,
-                              courier_lat: coords[0],
-                              courier_lng: coords[1],
-                              ...(eta ? { estimated_arrival: eta } : {}),
-                            }
-                          : prev
-                      );
-                    } else {
-                      onUpdateCourierLocation?.(
-                        liveTrackedOrder.id,
-                        coords,
-                        eta
-                      );
-                    }
-                  }}
-                  onProgressChange={(progress) => {
-                    if (liveTrackedOrder.id !== 'demo-biteq-2026') return;
-                    const nextStatus =
-                      progress >= 0.98
-                        ? 'DELIVERED'
-                        : progress >= 0.85
-                        ? 'ARRIVED_AT_CUSTOMER'
-                        : progress >= 0.35
-                        ? 'OUT_FOR_DELIVERY'
-                        : progress >= 0.2
-                        ? 'ARRIVED_AT_RESTAURANT'
-                        : 'GOING_TO_RESTAURANT';
-                    setTrackingOrder((prev) =>
-                      prev && prev.status !== nextStatus
-                        ? { ...prev, status: nextStatus }
-                        : prev
-                    );
-                  }}
                 />
 
                 {/* Courier Details Card or Real-Time Matching Indicator */}
@@ -579,12 +541,9 @@ export const CustomerExperience: React.FC<{
                         🛵
                       </div>
                       <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-emerald-700 animate-pulse" />
-                          <p className="text-xs text-stone-500 font-medium">
-                            Live Assigned Delivery Partner
-                          </p>
-                        </div>
+                        <p className="text-xs text-stone-500 font-medium">
+                          Live Assigned Delivery Partner
+                        </p>
                         <h4 className="text-base font-bold text-stone-900 font-display">
                           {liveTrackedOrder.delivery_partner_name}
                         </h4>
@@ -633,6 +592,71 @@ export const CustomerExperience: React.FC<{
                   </div>
 
                   <StatusTimeline currentStatus={liveTrackedOrder.status} />
+
+                  {liveTrackedOrder.id === 'demo-biteq-2026' && (
+                    <div className="pt-2">
+                      <GlassButton
+                        variant="secondary"
+                        fullWidth
+                        onClick={() => {
+                          const rLat = liveTrackedOrder.restaurant_lat || 12.9784;
+                          const rLng = liveTrackedOrder.restaurant_lng || 77.6408;
+                          const cLat = liveTrackedOrder.delivery_lat || 12.9352;
+                          const cLng = liveTrackedOrder.delivery_lng || 77.6245;
+                          setTrackingOrder((prev) => {
+                            if (!prev) return prev;
+                            if (prev.status === 'GOING_TO_RESTAURANT') {
+                              return {
+                                ...prev,
+                                status: 'ARRIVED_AT_RESTAURANT',
+                                courier_lat: rLat,
+                                courier_lng: rLng,
+                                estimated_arrival: '14 min',
+                              };
+                            }
+                            if (prev.status === 'ARRIVED_AT_RESTAURANT') {
+                              return {
+                                ...prev,
+                                status: 'OUT_FOR_DELIVERY',
+                                courier_lat: (rLat + cLat) / 2,
+                                courier_lng: (rLng + cLng) / 2,
+                                estimated_arrival: '8 min',
+                              };
+                            }
+                            if (prev.status === 'OUT_FOR_DELIVERY') {
+                              return {
+                                ...prev,
+                                status: 'ARRIVED_AT_CUSTOMER',
+                                courier_lat: cLat - 0.001,
+                                courier_lng: cLng - 0.001,
+                                estimated_arrival: 'Arriving now',
+                              };
+                            }
+                            if (prev.status === 'ARRIVED_AT_CUSTOMER') {
+                              return {
+                                ...prev,
+                                status: 'DELIVERED',
+                                courier_lat: cLat,
+                                courier_lng: cLng,
+                                estimated_arrival: 'Delivered',
+                              };
+                            }
+                            return {
+                              ...prev,
+                              status: 'GOING_TO_RESTAURANT',
+                              courier_lat: rLat - 0.008,
+                              courier_lng: rLng - 0.007,
+                              estimated_arrival: '16 min',
+                            };
+                          });
+                        }}
+                      >
+                        {liveTrackedOrder.status === 'DELIVERED'
+                          ? 'Restart Demo Route'
+                          : 'Next Demo Delivery Stage'}
+                      </GlassButton>
+                    </div>
+                  )}
 
                   <div className="pt-4 border-t border-stone-200/60 space-y-2 text-xs">
                     <p className="font-semibold text-stone-800">

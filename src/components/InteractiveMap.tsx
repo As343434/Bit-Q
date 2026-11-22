@@ -5,20 +5,15 @@ import {
   Marker,
   Popup,
   Polyline,
+  ZoomControl,
   useMap,
 } from 'react-leaflet';
 import L from 'leaflet';
 import {
-  Play,
-  Pause,
-  SkipForward,
-  RotateCcw,
   Crosshair,
   ExternalLink,
   MapPin,
-  Store,
   Bike,
-  Layers,
 } from 'lucide-react';
 import {
   buildSmoothUrbanRoute,
@@ -28,7 +23,22 @@ import {
   reverseGeocodeCoords,
 } from '../services/locationApi';
 
-// Custom SVG DivIcons matching the Glass Layer aesthetic
+const TILE_PROVIDERS = [
+  {
+    name: 'CartoDB Voyager',
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  },
+  {
+    name: 'OpenStreetMap',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  },
+];
+
+// Custom HTML DivIcons for Pickup, Drop-off, and Live Courier
 const createCustomPin = (bgColor: string, label: string, isCourier = false) =>
   L.divIcon({
     className: 'custom-leaflet-pin',
@@ -63,11 +73,12 @@ const createCustomPin = (bgColor: string, label: string, isCourier = false) =>
     iconAnchor: [0, 0],
   });
 
-// Ensures Leaflet always recalculates dimensions after Framer Motion / modal transitions
+// Keeps Leaflet viewport sized accurately inside animated modals/tabs and fits bounds cleanly
 const MapResizeAndBoundsController: React.FC<{
-  points: [number, number][];
+  boundsPoints: [number, number][];
+  endpointKey: string;
   recenterTrigger: number;
-}> = ({ points, recenterTrigger }) => {
+}> = ({ boundsPoints, endpointKey, recenterTrigger }) => {
   const map = useMap();
 
   useEffect(() => {
@@ -81,8 +92,9 @@ const MapResizeAndBoundsController: React.FC<{
     };
 
     invalidate();
-    const t1 = setTimeout(invalidate, 120);
-    const t2 = setTimeout(invalidate, 400);
+    const t1 = setTimeout(invalidate, 100);
+    const t2 = setTimeout(invalidate, 350);
+    const t3 = setTimeout(invalidate, 750);
 
     let observer: ResizeObserver | null = null;
     if (typeof ResizeObserver !== 'undefined' && container) {
@@ -93,364 +105,22 @@ const MapResizeAndBoundsController: React.FC<{
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
+      clearTimeout(t3);
       observer?.disconnect();
     };
   }, [map]);
 
   useEffect(() => {
-    if (points.length === 0) return;
-    if (points.length === 1) {
-      map.setView(points[0], 14, { animate: true });
+    if (boundsPoints.length === 0) return;
+    if (boundsPoints.length === 1) {
+      map.setView(boundsPoints[0], 14, { animate: true });
     } else {
-      const bounds = L.latLngBounds(points);
-      map.fitBounds(bounds, { padding: [70, 70], animate: true });
+      const bounds = L.latLngBounds(boundsPoints);
+      map.fitBounds(bounds, { padding: [72, 72], animate: true });
     }
-  }, [map, points, recenterTrigger]);
+  }, [map, endpointKey, recenterTrigger]);
 
   return null;
-};
-
-/**
- * Linear interpolation along a multi-point coordinate polyline for t in [0, 1]
- */
-function interpolateAlongRoute(
-  coords: [number, number][],
-  progress: number
-): { point: [number, number]; passedPoints: [number, number][] } {
-  if (coords.length === 0) {
-    return { point: [12.9716, 77.5946], passedPoints: [] };
-  }
-  if (coords.length === 1 || progress <= 0) {
-    return { point: coords[0], passedPoints: [coords[0]] };
-  }
-  if (progress >= 1) {
-    return { point: coords[coords.length - 1], passedPoints: coords };
-  }
-
-  const scaled = progress * (coords.length - 1);
-  const idx = Math.floor(scaled);
-  const frac = scaled - idx;
-  const p1 = coords[idx];
-  const p2 = coords[Math.min(idx + 1, coords.length - 1)];
-
-  const interp: [number, number] = [
-    p1[0] + (p2[0] - p1[0]) * frac,
-    p1[1] + (p2[1] - p1[1]) * frac,
-  ];
-  return {
-    point: interp,
-    passedPoints: [...coords.slice(0, idx + 1), interp],
-  };
-}
-
-/**
- * Built-in Zero-Dependency Vector Street Map Canvas
- * Always renders crisp city blocks, arterial roads, parks, landmarks, and animated route pins.
- */
-const OfflineStreetCanvas: React.FC<{
-  restaurantName: string;
-  restaurantCoords: [number, number];
-  customerName: string;
-  customerCoords: [number, number];
-  courierName: string;
-  courierCoords?: [number, number];
-  routeGeometry: [number, number][];
-  passedGeometry: [number, number][];
-  zoomFactor: number;
-}> = ({
-  restaurantName,
-  restaurantCoords,
-  customerName,
-  customerCoords,
-  courierName,
-  courierCoords,
-  routeGeometry,
-  passedGeometry,
-  zoomFactor,
-}) => {
-  const width = 800;
-  const height = 500;
-
-  const { project } = useMemo(() => {
-    const allPts: [number, number][] = [
-      restaurantCoords,
-      customerCoords,
-      ...(courierCoords ? [courierCoords] : []),
-      ...routeGeometry,
-    ];
-    let minLat = Infinity;
-    let maxLat = -Infinity;
-    let minLng = Infinity;
-    let maxLng = -Infinity;
-
-    for (const [lat, lng] of allPts) {
-      if (lat < minLat) minLat = lat;
-      if (lat > maxLat) maxLat = lat;
-      if (lng < minLng) minLng = lng;
-      if (lng > maxLng) maxLng = lng;
-    }
-
-    const latSpan = Math.max(0.015, maxLat - minLat);
-    const lngSpan = Math.max(0.015, maxLng - minLng);
-    const centerLat = (minLat + maxLat) / 2;
-    const centerLng = (minLng + maxLng) / 2;
-
-    const padX = 140;
-    const padY = 120;
-    const usableW = width - padX * 2;
-    const usableH = height - padY * 2;
-
-    const projectFn = ([lat, lng]: [number, number]): [number, number] => {
-      const normX = (lng - centerLng) / lngSpan;
-      const normY = (centerLat - lat) / latSpan;
-      const x = width / 2 + normX * usableW * zoomFactor;
-      const y = height / 2 + normY * usableH * zoomFactor;
-      return [x, y];
-    };
-
-    return { project: projectFn };
-  }, [restaurantCoords, customerCoords, courierCoords, routeGeometry, zoomFactor]);
-
-  const routeSvgPath = useMemo(() => {
-    if (routeGeometry.length < 2) return '';
-    return routeGeometry
-      .map((pt, idx) => {
-        const [x, y] = project(pt);
-        return `${idx === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
-      })
-      .join(' ');
-  }, [routeGeometry, project]);
-
-  const passedSvgPath = useMemo(() => {
-    if (passedGeometry.length < 2) return '';
-    return passedGeometry
-      .map((pt, idx) => {
-        const [x, y] = project(pt);
-        return `${idx === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
-      })
-      .join(' ');
-  }, [passedGeometry, project]);
-
-  const [restX, restY] = project(restaurantCoords);
-  const [custX, custY] = project(customerCoords);
-  const [courX, courY] = courierCoords
-    ? project(courierCoords)
-    : [restX, restY];
-
-  return (
-    <div className="relative w-full h-full bg-[#F4F2EC] select-none overflow-hidden">
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        preserveAspectRatio="xMidYMid slice"
-        className="w-full h-full block"
-      >
-        <defs>
-          <linearGradient id="biteqTrailGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#E11D48" />
-            <stop offset="100%" stopColor="#2563EB" />
-          </linearGradient>
-          <filter id="pinShadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="#0F172A" floodOpacity="0.2" />
-          </filter>
-        </defs>
-
-        {/* Base Terrain */}
-        <rect x="0" y="0" width={width} height={height} fill="#F4F2EC" />
-
-        {/* Urban City Blocks */}
-        <g fill="#EAE6DD">
-          <rect x="24" y="26" width="130" height="86" rx="10" />
-          <rect x="176" y="26" width="160" height="86" rx="10" />
-          <rect x="358" y="26" width="150" height="86" rx="10" />
-          <rect x="530" y="26" width="120" height="86" rx="10" />
-          <rect x="672" y="26" width="110" height="86" rx="10" />
-
-          <rect x="24" y="134" width="130" height="106" rx="10" />
-          <rect x="176" y="134" width="160" height="106" rx="10" />
-          <rect x="530" y="134" width="120" height="106" rx="10" />
-          <rect x="672" y="134" width="110" height="106" rx="10" />
-
-          <rect x="24" y="262" width="130" height="110" rx="10" />
-          <rect x="358" y="262" width="150" height="110" rx="10" />
-          <rect x="530" y="262" width="120" height="110" rx="10" />
-          <rect x="672" y="262" width="110" height="110" rx="10" />
-
-          <rect x="24" y="394" width="130" height="86" rx="10" />
-          <rect x="176" y="394" width="160" height="86" rx="10" />
-          <rect x="358" y="394" width="150" height="86" rx="10" />
-          <rect x="530" y="394" width="252" height="86" rx="10" />
-        </g>
-
-        {/* Botanical Parks & Water Feature */}
-        <rect x="358" y="134" width="150" height="106" rx="14" fill="#DFECE3" />
-        <rect x="176" y="262" width="160" height="110" rx="14" fill="#DFECE3" />
-        <path
-          d="M -20 445 Q 220 410, 440 455 T 830 430 L 830 510 L -20 510 Z"
-          fill="#DCEBF7"
-          opacity="0.75"
-        />
-
-        {/* Secondary Cross Streets */}
-        <g stroke="#FFFFFF" strokeWidth="7" strokeLinecap="round" opacity="0.92">
-          <line x1="0" y1="123" x2={width} y2="123" />
-          <line x1="0" y1="251" x2={width} y2="251" />
-          <line x1="0" y1="383" x2={width} y2="383" />
-          <line x1="165" y1="0" x2="165" y2={height} />
-          <line x1="347" y1="0" x2="347" y2={height} />
-          <line x1="519" y1="0" x2="519" y2={height} />
-          <line x1="661" y1="0" x2="661" y2={height} />
-        </g>
-
-        {/* Primary Arterial Avenues */}
-        <g stroke="#FFFFFF" strokeWidth="13" strokeLinecap="round">
-          <path d="M -10 190 Q 320 155, 810 215" fill="none" />
-          <path d="M 270 -10 Q 390 250, 460 510" fill="none" />
-          <path d="M 600 -10 L 560 510" fill="none" />
-        </g>
-
-        {/* Street Name Labels */}
-        <g
-          fill="#78716C"
-          fontFamily="Plus Jakarta Sans, sans-serif"
-          fontSize="10"
-          fontWeight="600"
-          opacity="0.85"
-        >
-          <text x="200" y="119">CMH ROAD</text>
-          <text x="538" y="182">100 FEET RD</text>
-          <text x="380" y="247">12TH MAIN AVE</text>
-          <text x="195" y="379">80 FEET RD</text>
-          <text x="392" y="190" fill="#4B6B56">Domlur Park</text>
-        </g>
-
-        {/* Route Path Shadow + Upcoming Dashed Route */}
-        {routeSvgPath && (
-          <>
-            <path
-              d={routeSvgPath}
-              fill="none"
-              stroke="#FFFFFF"
-              strokeWidth="10"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              opacity="0.9"
-            />
-            <path
-              d={routeSvgPath}
-              fill="none"
-              stroke="#E11D48"
-              strokeWidth="4.5"
-              strokeDasharray="9 8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              opacity="0.7"
-            />
-          </>
-        )}
-
-        {/* Completed Route Trail */}
-        {passedSvgPath && (
-          <path
-            d={passedSvgPath}
-            fill="none"
-            stroke="url(#biteqTrailGrad)"
-            strokeWidth="5.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        )}
-
-        {/* Restaurant Pickup Pin */}
-        <g transform={`translate(${restX}, ${restY})`} filter="url(#pinShadow)">
-          <rect
-            x="-64"
-            y="-16"
-            width="128"
-            height="32"
-            rx="16"
-            fill="#E11D48"
-            stroke="#FFFFFF"
-            strokeWidth="2.5"
-          />
-          <circle cx="-46" cy="0" r="4" fill="#FFFFFF" />
-          <text
-            x="6"
-            y="4"
-            textAnchor="middle"
-            fill="#FFFFFF"
-            fontFamily="Plus Jakarta Sans, sans-serif"
-            fontSize="11"
-            fontWeight="700"
-          >
-            {restaurantName.length > 14
-              ? `${restaurantName.slice(0, 13)}…`
-              : restaurantName}
-          </text>
-        </g>
-
-        {/* Customer Drop-Off Pin */}
-        <g transform={`translate(${custX}, ${custY})`} filter="url(#pinShadow)">
-          <rect
-            x="-58"
-            y="-16"
-            width="116"
-            height="32"
-            rx="16"
-            fill="#2563EB"
-            stroke="#FFFFFF"
-            strokeWidth="2.5"
-          />
-          <circle cx="-40" cy="0" r="4" fill="#FFFFFF" />
-          <text
-            x="6"
-            y="4"
-            textAnchor="middle"
-            fill="#FFFFFF"
-            fontFamily="Plus Jakarta Sans, sans-serif"
-            fontSize="11"
-            fontWeight="700"
-          >
-            {customerName.length > 12
-              ? `${customerName.slice(0, 11)}…`
-              : customerName}
-          </text>
-        </g>
-
-        {/* Animated Courier Pin */}
-        {courierCoords && (
-          <g
-            transform={`translate(${courX}, ${courY})`}
-            style={{ transition: 'transform 180ms linear' }}
-            filter="url(#pinShadow)"
-          >
-            <circle r="22" fill="#0F172A" opacity="0.14" />
-            <rect
-              x="-62"
-              y="-17"
-              width="124"
-              height="34"
-              rx="17"
-              fill="#0F172A"
-              stroke="#FFFFFF"
-              strokeWidth="2.5"
-            />
-            <circle cx="-44" cy="0" r="4.5" fill="#34D399" />
-            <text
-              x="7"
-              y="4"
-              textAnchor="middle"
-              fill="#FFFFFF"
-              fontFamily="Plus Jakarta Sans, sans-serif"
-              fontSize="11"
-              fontWeight="700"
-            >
-              {courierName.split(' ')[0] || 'Courier'} · Live
-            </text>
-          </g>
-        )}
-      </svg>
-    </div>
-  );
 };
 
 export interface InteractiveRouteMapProps {
@@ -466,9 +136,6 @@ export interface InteractiveRouteMapProps {
   statusLabel: string;
   heightClass?: string;
   showNavigateButton?: boolean;
-  onSimulateStep?: () => void;
-  onUpdateCoords?: (coords: [number, number], etaText?: string) => void;
-  onProgressChange?: (progress: number) => void;
 }
 
 export const InteractiveRouteMap: React.FC<InteractiveRouteMapProps> = ({
@@ -484,47 +151,39 @@ export const InteractiveRouteMap: React.FC<InteractiveRouteMapProps> = ({
   statusLabel,
   heightClass = 'h-[460px]',
   showNavigateButton = false,
-  onUpdateCoords,
-  onProgressChange,
 }) => {
   const [recenterTrigger, setRecenterTrigger] = useState(0);
-  const [zoomFactor, setZoomFactor] = useState(1);
+  const [providerIndex, setProviderIndex] = useState(0);
+  const tilesLoadedRef = useRef(0);
+  const tileErrorCountRef = useRef(0);
 
-  // Build guaranteed curved route immediately so vector & markers never start empty
   const fallbackRoute = useMemo(() => {
-    const baseWaypoints: [number, number][] = courierCoords
+    const waypoints: [number, number][] = courierCoords
       ? [courierCoords, restaurantCoords, customerCoords]
       : [restaurantCoords, customerCoords];
-    return buildSmoothUrbanRoute(baseWaypoints, 28);
+    return buildSmoothUrbanRoute(waypoints, 28);
   }, [
     restaurantCoords[0],
     restaurantCoords[1],
     customerCoords[0],
     customerCoords[1],
+    courierCoords?.[0],
+    courierCoords?.[1],
   ]);
 
   const [routeGeometry, setRouteGeometry] =
     useState<[number, number][]>(fallbackRoute);
-  const [totalRouteKm, setTotalRouteKm] = useState<number>(distanceKm || 4.2);
-  const [totalRouteMins, setTotalRouteMins] = useState<number>(() => {
-    const parsed = parseInt(etaText, 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : 14;
-  });
-
-  // Playback state for smooth demo animation + manual steps
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [routeProgress, setRouteProgress] = useState<number>(0.12);
+  const [routeKm, setRouteKm] = useState<number>(distanceKm || 4.2);
   const [streetCheckpoint, setStreetCheckpoint] = useState<string>(() =>
-    getCheckpointStreetName(0.12)
+    getCheckpointStreetName(0.35)
   );
 
-  // Hybrid rendering mode: tries Live Leaflet tiles, auto-falls back to Vector Street Map on error/timeout
-  const [mapMode, setMapMode] = useState<'live' | 'vector'>('live');
-  const [tilesLoadedCount, setTilesLoadedCount] = useState(0);
-  const tileErrorCountRef = useRef(0);
-  const lastSyncRef = useRef(0);
+  // Sync immediate fallback geometry whenever coordinates update
+  useEffect(() => {
+    setRouteGeometry(fallbackRoute);
+  }, [fallbackRoute]);
 
-  // Fetch OSRM driving route in background; keep fallbackRoute if unreachable
+  // Fetch real OSRM street geometry in background (no API key needed)
   useEffect(() => {
     let isMounted = true;
     const waypoints: [number, number][] = courierCoords
@@ -537,8 +196,7 @@ export const InteractiveRouteMap: React.FC<InteractiveRouteMapProps> = ({
         setRouteGeometry(route.coordinates);
       }
       if (route.distanceKm > 0) {
-        setTotalRouteKm(route.distanceKm);
-        setTotalRouteMins(route.durationMinutes);
+        setRouteKm(route.distanceKm);
       }
     });
 
@@ -550,91 +208,15 @@ export const InteractiveRouteMap: React.FC<InteractiveRouteMapProps> = ({
     restaurantCoords[1],
     customerCoords[0],
     customerCoords[1],
+    courierCoords?.[0],
+    courierCoords?.[1],
   ]);
 
-  // Automatic tile-load watchdog: if external tiles fail or block within 3.8s, switch to Vector Map
+  // Resolve current street/landmark name near courier (or restaurant)
   useEffect(() => {
-    if (mapMode !== 'live' || tilesLoadedCount > 0) return;
-    const timer = setTimeout(() => {
-      if (tilesLoadedCount === 0) {
-        setMapMode('vector');
-      }
-    }, 3800);
-    return () => clearTimeout(timer);
-  }, [mapMode, tilesLoadedCount]);
-
-  // Smooth auto-play interpolation loop
-  useEffect(() => {
-    if (!isPlaying) return;
-    const interval = setInterval(() => {
-      setRouteProgress((prev) => {
-        const next = prev + 0.015;
-        if (next >= 1) {
-          setIsPlaying(false);
-          return 1;
-        }
-        return next;
-      });
-    }, 220);
-    return () => clearInterval(interval);
-  }, [isPlaying]);
-
-  // Compute current animated courier position & remaining telemetry from routeProgress
-  const { point: activeCourierPoint, passedPoints } = useMemo(
-    () => interpolateAlongRoute(routeGeometry, routeProgress),
-    [routeGeometry, routeProgress]
-  );
-
-  const displayCourierCoords: [number, number] | undefined = useMemo(() => {
-    if (isPlaying || routeProgress > 0.12) {
-      return activeCourierPoint;
-    }
-    return courierCoords || activeCourierPoint;
-  }, [isPlaying, routeProgress, activeCourierPoint, courierCoords]);
-
-  const remainingKm = useMemo(() => {
-    if (displayCourierCoords) {
-      const direct = calculateDistanceKm(
-        displayCourierCoords[0],
-        displayCourierCoords[1],
-        customerCoords[0],
-        customerCoords[1]
-      );
-      return Number(Math.max(0.1, direct * 1.15).toFixed(1));
-    }
-    return Number(Math.max(0.1, totalRouteKm * (1 - routeProgress)).toFixed(1));
-  }, [displayCourierCoords, customerCoords, totalRouteKm, routeProgress]);
-
-  const displayEta = useMemo(() => {
-    if (routeProgress >= 0.98) return 'Arrived';
-    const mins = Math.max(1, Math.round(totalRouteMins * (1 - routeProgress)));
-    return `${mins} min`;
-  }, [totalRouteMins, routeProgress]);
-
-  // Update street name + throttled parent/Firestore sync
-  useEffect(() => {
-    const checkpoint = getCheckpointStreetName(routeProgress);
-    setStreetCheckpoint(checkpoint);
-    onProgressChange?.(routeProgress);
-
-    if (onUpdateCoords && displayCourierCoords && (isPlaying || routeProgress > 0.12)) {
-      const now = Date.now();
-      if (now - lastSyncRef.current > 2400 || routeProgress >= 1) {
-        lastSyncRef.current = now;
-        onUpdateCoords(displayCourierCoords, displayEta);
-      }
-    }
-  }, [routeProgress, displayEta]);
-
-  // Optionally resolve real street name via Nominatim on discrete steps
-  useEffect(() => {
-    if (!displayCourierCoords || isPlaying) return;
+    const target = courierCoords || restaurantCoords;
     let isMounted = true;
-    reverseGeocodeCoords(
-      displayCourierCoords[0],
-      displayCourierCoords[1],
-      routeProgress
-    ).then((res) => {
+    reverseGeocodeCoords(target[0], target[1], 0.4).then((res) => {
       if (isMounted && res.displayName) {
         setStreetCheckpoint(res.displayName);
       }
@@ -642,31 +224,42 @@ export const InteractiveRouteMap: React.FC<InteractiveRouteMapProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [Math.round(routeProgress * 8)]);
+  }, [
+    courierCoords?.[0],
+    courierCoords?.[1],
+    restaurantCoords[0],
+    restaurantCoords[1],
+  ]);
 
-  const handleStepForward = () => {
-    setIsPlaying(false);
-    setRouteProgress((prev) => {
-      const next = prev >= 1 ? 0.125 : Math.min(1, Number((prev + 0.125).toFixed(3)));
-      return next;
-    });
-  };
+  const remainingKm = useMemo(() => {
+    if (courierCoords) {
+      const direct = calculateDistanceKm(
+        courierCoords[0],
+        courierCoords[1],
+        customerCoords[0],
+        customerCoords[1]
+      );
+      return Number(Math.max(0.1, direct * 1.15).toFixed(1));
+    }
+    return Number((distanceKm || routeKm || 4.2).toFixed(1));
+  }, [courierCoords, customerCoords, distanceKm, routeKm]);
 
-  const handleResetRoute = () => {
-    setIsPlaying(false);
-    setRouteProgress(0);
-    setZoomFactor(1);
-    setRecenterTrigger((c) => c + 1);
-  };
+  const boundsPoints = useMemo<[number, number][]>(
+    () =>
+      courierCoords
+        ? [restaurantCoords, customerCoords, courierCoords]
+        : [restaurantCoords, customerCoords],
+    [
+      restaurantCoords[0],
+      restaurantCoords[1],
+      customerCoords[0],
+      customerCoords[1],
+      courierCoords?.[0],
+      courierCoords?.[1],
+    ]
+  );
 
-  const handleRecenter = () => {
-    setZoomFactor(1);
-    setRecenterTrigger((c) => c + 1);
-  };
-
-  const allPoints: [number, number][] = displayCourierCoords
-    ? [restaurantCoords, customerCoords, displayCourierCoords]
-    : [restaurantCoords, customerCoords];
+  const endpointKey = `${restaurantCoords[0].toFixed(4)}-${restaurantCoords[1].toFixed(4)}-${customerCoords[0].toFixed(4)}-${customerCoords[1].toFixed(4)}`;
 
   const restaurantIcon = useMemo(
     () => createCustomPin('#E11D48', restaurantName),
@@ -686,11 +279,13 @@ export const InteractiveRouteMap: React.FC<InteractiveRouteMapProps> = ({
     [courierName]
   );
 
+  const activeProvider = TILE_PROVIDERS[providerIndex] || TILE_PROVIDERS[0];
+
   return (
     <div
-      className={`relative rounded-3xl overflow-hidden border border-slate-200/90 shadow-sm ${heightClass} w-full bg-[#F4F2EC] flex flex-col`}
+      className={`relative rounded-3xl overflow-hidden border border-slate-200/90 shadow-sm ${heightClass} w-full bg-slate-100`}
     >
-      {/* Top Floating Glass Overlay: Telemetry + Mode Toggle */}
+      {/* Top Floating Glass Telemetry & Controls */}
       <div className="absolute top-3.5 left-3.5 right-3.5 z-20 pointer-events-none flex flex-wrap items-start justify-between gap-2.5">
         <div className="glass-elevated rounded-2xl px-4 py-3 pointer-events-auto max-w-xs space-y-1">
           <div className="flex items-center gap-2 text-xs font-semibold text-rose-600">
@@ -699,7 +294,10 @@ export const InteractiveRouteMap: React.FC<InteractiveRouteMapProps> = ({
           </div>
           <div className="flex items-baseline gap-2 font-mono tabular-nums">
             <span className="text-lg font-bold font-display text-slate-900">
-              {displayEta === 'Arrived' ? 'Arrived' : `ETA ${displayEta}`}
+              {etaText.toLowerCase().includes('arrived') ||
+              etaText.toLowerCase().includes('delivered')
+                ? etaText
+                : `ETA ${etaText}`}
             </span>
             <span className="text-xs text-slate-500">·</span>
             <span className="text-xs font-medium text-slate-600">
@@ -715,45 +313,15 @@ export const InteractiveRouteMap: React.FC<InteractiveRouteMapProps> = ({
           </p>
         </div>
 
-        {/* Map Mode Switcher + Recenter + External Navigation */}
-        <div className="flex items-center gap-2 pointer-events-auto flex-wrap">
-          <div className="glass-elevated p-1 rounded-xl flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => {
-                tileErrorCountRef.current = 0;
-                setMapMode('live');
-              }}
-              className={`min-h-[32px] px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 flex items-center gap-1 ${
-                mapMode === 'live'
-                  ? 'bg-slate-900 text-white'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>Live Map</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMapMode('vector')}
-              className={`min-h-[32px] px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
-                mapMode === 'vector'
-                  ? 'bg-slate-900 text-white'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Street Map
-            </button>
-          </div>
-
+        <div className="flex items-center gap-2 pointer-events-auto">
           <button
             type="button"
-            onClick={handleRecenter}
+            onClick={() => setRecenterTrigger((c) => c + 1)}
             className="glass-elevated min-h-[40px] px-3 py-2 rounded-xl text-xs font-semibold text-slate-800 hover:bg-white flex items-center gap-1.5 shadow-sm transition-transform active:scale-95 whitespace-nowrap shrink-0"
             title="Recenter Route View"
           >
             <Crosshair className="w-3.5 h-3.5 text-blue-600" />
-            <span className="hidden sm:inline">Recenter</span>
+            <span>Recenter</span>
           </button>
 
           {showNavigateButton && (
@@ -770,179 +338,97 @@ export const InteractiveRouteMap: React.FC<InteractiveRouteMapProps> = ({
         </div>
       </div>
 
-      {/* Main Map Surface: Live Leaflet or Built-In Offline Vector Street Map */}
-      <div className="relative flex-1 w-full h-full">
-        {mapMode === 'live' ? (
-          <MapContainer
-            center={restaurantCoords}
-            zoom={13}
-            scrollWheelZoom={false}
-            className="w-full h-full z-10"
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-              eventHandlers={{
-                tileload: () => {
-                  setTilesLoadedCount((c) => c + 1);
-                },
-                tileerror: () => {
-                  tileErrorCountRef.current += 1;
-                  if (
-                    tileErrorCountRef.current >= 2 &&
-                    tilesLoadedCount === 0
-                  ) {
-                    setMapMode('vector');
-                  }
-                },
-              }}
-            />
+      {/* Real JavaScript Leaflet Map (Zero API Key) */}
+      <MapContainer
+        center={restaurantCoords}
+        zoom={13}
+        zoomControl={false}
+        scrollWheelZoom={true}
+        style={{ height: '100%', width: '100%', minHeight: '400px' }}
+      >
+        <ZoomControl position="bottomright" />
+        <TileLayer
+          key={activeProvider.name}
+          attribution={activeProvider.attribution}
+          url={activeProvider.url}
+          eventHandlers={{
+            tileload: () => {
+              tilesLoadedRef.current += 1;
+            },
+            tileerror: () => {
+              tileErrorCountRef.current += 1;
+              if (
+                tileErrorCountRef.current >= 3 &&
+                tilesLoadedRef.current === 0 &&
+                providerIndex < TILE_PROVIDERS.length - 1
+              ) {
+                tileErrorCountRef.current = 0;
+                setProviderIndex((i) => i + 1);
+              }
+            },
+          }}
+        />
 
-            <MapResizeAndBoundsController
-              points={allPoints}
-              recenterTrigger={recenterTrigger}
-            />
+        <MapResizeAndBoundsController
+          boundsPoints={boundsPoints}
+          endpointKey={endpointKey}
+          recenterTrigger={recenterTrigger}
+        />
 
-            {routeGeometry.length > 1 && (
-              <Polyline
-                positions={routeGeometry}
-                pathOptions={{
-                  color: '#E11D48',
-                  weight: 4,
-                  opacity: 0.55,
-                  dashArray: '8, 8',
-                }}
-              />
-            )}
-
-            {passedPoints.length > 1 && (
-              <Polyline
-                positions={passedPoints}
-                pathOptions={{
-                  color: '#2563EB',
-                  weight: 5,
-                  opacity: 0.92,
-                }}
-              />
-            )}
-
-            <Marker position={restaurantCoords} icon={restaurantIcon}>
-              <Popup>
-                <div className="text-xs font-sans">
-                  <strong>Pickup: {restaurantName}</strong>
-                </div>
-              </Popup>
-            </Marker>
-
-            <Marker position={customerCoords} icon={customerIcon}>
-              <Popup>
-                <div className="text-xs font-sans">
-                  <strong>Drop-off: {customerName}</strong>
-                  <br />
-                  {customerAddress}
-                </div>
-              </Popup>
-            </Marker>
-
-            {displayCourierCoords && (
-              <Marker position={displayCourierCoords} icon={courierIcon}>
-                <Popup>
-                  <div className="text-xs font-sans space-y-1">
-                    <strong>Courier: {courierName || 'Partner'}</strong>
-                    <p className="text-[11px] text-slate-600">
-                      Near {streetCheckpoint}
-                    </p>
-                  </div>
-                </Popup>
-              </Marker>
-            )}
-          </MapContainer>
-        ) : (
-          <OfflineStreetCanvas
-            restaurantName={restaurantName}
-            restaurantCoords={restaurantCoords}
-            customerName={customerName}
-            customerCoords={customerCoords}
-            courierName={courierName || 'Courier'}
-            courierCoords={displayCourierCoords}
-            routeGeometry={routeGeometry}
-            passedGeometry={passedPoints}
-            zoomFactor={zoomFactor}
+        {routeGeometry.length > 1 && (
+          <Polyline
+            positions={routeGeometry}
+            pathOptions={{
+              color: '#E11D48',
+              weight: 4.5,
+              opacity: 0.85,
+              dashArray: '8, 8',
+            }}
           />
         )}
-      </div>
 
-      {/* Bottom Playback & Step Control Bar */}
-      <div className="absolute bottom-3.5 left-3.5 right-3.5 z-20 pointer-events-none flex justify-center">
-        <div className="glass-elevated rounded-2xl px-3.5 py-2.5 pointer-events-auto flex flex-wrap items-center justify-between gap-3 w-full max-w-2xl shadow-lg">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                if (routeProgress >= 1) setRouteProgress(0);
-                setIsPlaying((p) => !p);
-              }}
-              className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-transform active:scale-95 whitespace-nowrap shrink-0 ${
-                isPlaying
-                  ? 'bg-rose-600 text-white'
-                  : 'bg-slate-900 text-white hover:bg-slate-800'
-              }`}
-            >
-              {isPlaying ? (
-                <>
-                  <Pause className="w-3.5 h-3.5" />
-                  <span>Pause</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-3.5 h-3.5" />
-                  <span>{routeProgress >= 1 ? 'Replay' : 'Auto-Play'}</span>
-                </>
-              )}
-            </button>
+        {courierCoords && (
+          <Polyline
+            positions={[courierCoords, customerCoords]}
+            pathOptions={{
+              color: '#2563EB',
+              weight: 3.5,
+              opacity: 0.45,
+            }}
+          />
+        )}
 
-            <button
-              type="button"
-              onClick={handleStepForward}
-              className="min-h-[38px] px-3 py-1.5 rounded-xl bg-white/90 hover:bg-white border border-slate-200/80 text-xs font-semibold text-slate-800 flex items-center gap-1.5 transition-transform active:scale-95 whitespace-nowrap shrink-0"
-            >
-              <SkipForward className="w-3.5 h-3.5 text-blue-600" />
-              <span>Step</span>
-            </button>
+        <Marker position={restaurantCoords} icon={restaurantIcon}>
+          <Popup>
+            <div className="text-xs font-sans">
+              <strong>Pickup: {restaurantName}</strong>
+            </div>
+          </Popup>
+        </Marker>
 
-            <button
-              type="button"
-              onClick={handleResetRoute}
-              className="min-h-[38px] min-w-[38px] p-2 rounded-xl bg-white/90 hover:bg-white border border-slate-200/80 text-slate-700 flex items-center justify-center transition-transform active:scale-95 shrink-0"
-              title="Reset Route"
-              aria-label="Reset Route"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
-          </div>
+        <Marker position={customerCoords} icon={customerIcon}>
+          <Popup>
+            <div className="text-xs font-sans">
+              <strong>Drop-off: {customerName}</strong>
+              <br />
+              {customerAddress}
+            </div>
+          </Popup>
+        </Marker>
 
-          {/* Interactive Route Progress Scrubber */}
-          <div className="flex items-center gap-2.5 flex-1 min-w-[140px]">
-            <Store className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={Math.round(routeProgress * 100)}
-              onChange={(e) => {
-                setIsPlaying(false);
-                setRouteProgress(Number(e.target.value) / 100);
-              }}
-              aria-label="Delivery route progress"
-              className="w-full accent-rose-600 cursor-pointer h-1.5"
-            />
-            <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-            <span className="text-xs font-mono font-semibold text-slate-700 tabular-nums w-9 text-right shrink-0">
-              {Math.round(routeProgress * 100)}%
-            </span>
-          </div>
-        </div>
-      </div>
+        {courierCoords && (
+          <Marker position={courierCoords} icon={courierIcon}>
+            <Popup>
+              <div className="text-xs font-sans space-y-1">
+                <strong>Courier: {courierName || 'Partner'}</strong>
+                <p className="text-[11px] text-slate-600">
+                  Near {streetCheckpoint}
+                </p>
+              </div>
+            </Popup>
+          </Marker>
+        )}
+      </MapContainer>
     </div>
   );
 };

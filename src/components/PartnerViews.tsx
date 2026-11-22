@@ -2173,45 +2173,6 @@ export const DeliveryPartnerExperience: React.FC<{
                       ' '
                     )}`}
                     showNavigateButton
-                    onUpdateCoords={(coords, eta) => {
-                      if (effectiveActiveDelivery.id === 'demo-biteq-2026') {
-                        setDemoDelivery((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                courier_lat: coords[0],
-                                courier_lng: coords[1],
-                                ...(eta ? { estimated_arrival: eta } : {}),
-                              }
-                            : prev
-                        );
-                      } else {
-                        onUpdateCourierLocation?.(
-                          effectiveActiveDelivery.id,
-                          coords,
-                          eta
-                        );
-                      }
-                    }}
-                    onProgressChange={(progress) => {
-                      if (effectiveActiveDelivery.id !== 'demo-biteq-2026')
-                        return;
-                      const nextStatus: OrderStatus =
-                        progress >= 0.98
-                          ? 'DELIVERED'
-                          : progress >= 0.85
-                          ? 'ARRIVED_AT_CUSTOMER'
-                          : progress >= 0.35
-                          ? 'OUT_FOR_DELIVERY'
-                          : progress >= 0.2
-                          ? 'ARRIVED_AT_RESTAURANT'
-                          : 'GOING_TO_RESTAURANT';
-                      setDemoDelivery((prev) =>
-                        prev && prev.status !== nextStatus
-                          ? { ...prev, status: nextStatus }
-                          : prev
-                      );
-                    }}
                   />
 
                   {/* Free API Hardware GPS Broadcaster Toggle */}
