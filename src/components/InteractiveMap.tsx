@@ -9,12 +9,7 @@ import {
   useMap,
 } from 'react-leaflet';
 import L from 'leaflet';
-import {
-  Crosshair,
-  ExternalLink,
-  MapPin,
-  Bike,
-} from 'lucide-react';
+import { Crosshair, ExternalLink, MapPin, Bike } from 'lucide-react';
 import {
   buildSmoothUrbanRoute,
   calculateDistanceKm,
@@ -23,30 +18,43 @@ import {
   reverseGeocodeCoords,
 } from '../services/locationApi';
 
+// 100% Free street tile providers requiring zero API keys and no watermarks
 const TILE_PROVIDERS = [
-  {
-    name: 'CartoDB Voyager',
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
-  },
   {
     name: 'OpenStreetMap',
     url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution:
       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   },
+  {
+    name: 'Esri World Street Map',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri &mdash; OpenStreetMap contributors',
+  },
 ];
 
-// Custom HTML DivIcons for Pickup, Drop-off, and Live Courier
-const createCustomPin = (bgColor: string, label: string, isCourier = false) =>
-  L.divIcon({
+const escapeHtml = (str: string) =>
+  str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+// Custom HTML DivIcons with explicit width:max-content so labels never collapse or clip
+const createCustomPin = (bgColor: string, label: string, isCourier = false) => {
+  const safeLabel = escapeHtml(
+    label.length > 22 ? `${label.slice(0, 20)}…` : label
+  );
+  return L.divIcon({
     className: 'custom-leaflet-pin',
     html: `
       <div style="
-        display:flex;
+        position:relative;
+        display:inline-flex;
         align-items:center;
         gap:6px;
+        width:max-content;
         background:${bgColor};
         color:#ffffff;
         padding:6px 12px;
@@ -54,8 +62,9 @@ const createCustomPin = (bgColor: string, label: string, isCourier = false) =>
         font-family:'Plus Jakarta Sans',sans-serif;
         font-size:11px;
         font-weight:700;
+        line-height:1.2;
         white-space:nowrap;
-        box-shadow:0 10px 25px rgba(15,23,42,0.28);
+        box-shadow:0 8px 20px rgba(15,23,42,0.28);
         border:2px solid #ffffff;
         transform:translate(-50%, -50%);
       ">
@@ -64,16 +73,18 @@ const createCustomPin = (bgColor: string, label: string, isCourier = false) =>
           height:7px;
           border-radius:9999px;
           background:${isCourier ? '#34D399' : '#ffffff'};
+          flex-shrink:0;
           display:inline-block;
         "></span>
-        <span>${label}</span>
+        <span>${safeLabel}</span>
       </div>
     `,
     iconSize: [0, 0],
     iconAnchor: [0, 0],
   });
+};
 
-// Keeps Leaflet viewport sized accurately inside animated modals/tabs and fits bounds cleanly
+// Keeps Leaflet viewport sized accurately inside animated modals/tabs and fits bounds below top overlay
 const MapResizeAndBoundsController: React.FC<{
   boundsPoints: [number, number][];
   endpointKey: string;
@@ -116,7 +127,12 @@ const MapResizeAndBoundsController: React.FC<{
       map.setView(boundsPoints[0], 14, { animate: true });
     } else {
       const bounds = L.latLngBounds(boundsPoints);
-      map.fitBounds(bounds, { padding: [72, 72], animate: true });
+      map.fitBounds(bounds, {
+        paddingTopLeft: [48, 165],
+        paddingBottomRight: [48, 56],
+        maxZoom: 15,
+        animate: true,
+      });
     }
   }, [map, endpointKey, recenterTrigger]);
 
@@ -149,7 +165,7 @@ export const InteractiveRouteMap: React.FC<InteractiveRouteMapProps> = ({
   etaText,
   distanceKm,
   statusLabel,
-  heightClass = 'h-[460px]',
+  heightClass = 'h-[480px]',
   showNavigateButton = false,
 }) => {
   const [recenterTrigger, setRecenterTrigger] = useState(0);
@@ -178,12 +194,10 @@ export const InteractiveRouteMap: React.FC<InteractiveRouteMapProps> = ({
     getCheckpointStreetName(0.35)
   );
 
-  // Sync immediate fallback geometry whenever coordinates update
   useEffect(() => {
     setRouteGeometry(fallbackRoute);
   }, [fallbackRoute]);
 
-  // Fetch real OSRM street geometry in background (no API key needed)
   useEffect(() => {
     let isMounted = true;
     const waypoints: [number, number][] = courierCoords
@@ -212,7 +226,6 @@ export const InteractiveRouteMap: React.FC<InteractiveRouteMapProps> = ({
     courierCoords?.[1],
   ]);
 
-  // Resolve current street/landmark name near courier (or restaurant)
   useEffect(() => {
     const target = courierCoords || restaurantCoords;
     let isMounted = true;
@@ -338,13 +351,13 @@ export const InteractiveRouteMap: React.FC<InteractiveRouteMapProps> = ({
         </div>
       </div>
 
-      {/* Real JavaScript Leaflet Map (Zero API Key) */}
+      {/* Real JavaScript Leaflet Map using OpenStreetMap / Esri free tiles (Zero API Key) */}
       <MapContainer
         center={restaurantCoords}
         zoom={13}
         zoomControl={false}
         scrollWheelZoom={true}
-        style={{ height: '100%', width: '100%', minHeight: '400px' }}
+        style={{ height: '100%', width: '100%', minHeight: '420px' }}
       >
         <ZoomControl position="bottomright" />
         <TileLayer
