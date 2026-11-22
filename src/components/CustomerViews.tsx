@@ -12,6 +12,7 @@ import {
   Tag,
   AlertCircle,
   Check,
+  MapPin,
 } from 'lucide-react';
 import {
   UserProfile,
@@ -50,6 +51,7 @@ import {
   StoreRatingBox,
 } from './GlassUI';
 import { InteractiveRouteMap } from './InteractiveMap';
+import { createPrototypeDemoOrder } from '../services/locationApi';
 
 export const CustomerExperience: React.FC<{
   user: UserProfile;
@@ -87,6 +89,11 @@ export const CustomerExperience: React.FC<{
     subject: string;
     message: string;
   }) => Promise<void>;
+  onUpdateCourierLocation?: (
+    orderId: string,
+    coords: [number, number],
+    etaText?: string
+  ) => Promise<void>;
   onLogout: () => Promise<void>;
 }> = ({
   user,
@@ -104,6 +111,7 @@ export const CustomerExperience: React.FC<{
   onUpdateProfile,
   onPlaceOrder,
   onSubmitSupportTicket,
+  onUpdateCourierLocation,
   onLogout,
 }) => {
   const [activeTab, setActiveTab] = useState<CustomerTab>('home');
@@ -343,6 +351,29 @@ export const CustomerExperience: React.FC<{
     }
   };
 
+  const handleLaunchDemoMap = () => {
+    const existingActive = orders.find(
+      (o) =>
+        o.customer_uid === user.google_uid &&
+        o.status !== 'DELIVERED' &&
+        o.status !== 'CANCELLED'
+    );
+    if (existingActive) {
+      setTrackingOrder(existingActive);
+      setActiveTab('orders');
+      return;
+    }
+    const demo = createPrototypeDemoOrder({
+      customerName: user.name,
+      customerUid: user.google_uid,
+      customerLocation: user.location,
+      customerLat: user.lat,
+      customerLng: user.lng,
+    });
+    setTrackingOrder(demo);
+    setActiveTab('orders');
+  };
+
   const customerOrders = useMemo(
     () => orders.filter((o) => o.customer_uid === user.google_uid),
     [orders, user.google_uid]
@@ -350,6 +381,7 @@ export const CustomerExperience: React.FC<{
 
   const liveTrackedOrder = useMemo(() => {
     if (!trackingOrder) return null;
+    if (trackingOrder.id === 'demo-biteq-2026') return trackingOrder;
     return (
       customerOrders.find((o) => o.id === trackingOrder.id) || trackingOrder
     );
@@ -499,31 +531,91 @@ export const CustomerExperience: React.FC<{
                   etaText={liveTrackedOrder.estimated_arrival}
                   distanceKm={liveTrackedOrder.distance_km}
                   statusLabel={liveTrackedOrder.status.replace(/_/g, ' ')}
+                  onUpdateCoords={(coords, eta) => {
+                    if (liveTrackedOrder.id === 'demo-biteq-2026') {
+                      setTrackingOrder((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              courier_lat: coords[0],
+                              courier_lng: coords[1],
+                              ...(eta ? { estimated_arrival: eta } : {}),
+                            }
+                          : prev
+                      );
+                    } else {
+                      onUpdateCourierLocation?.(
+                        liveTrackedOrder.id,
+                        coords,
+                        eta
+                      );
+                    }
+                  }}
+                  onProgressChange={(progress) => {
+                    if (liveTrackedOrder.id !== 'demo-biteq-2026') return;
+                    const nextStatus =
+                      progress >= 0.98
+                        ? 'DELIVERED'
+                        : progress >= 0.85
+                        ? 'ARRIVED_AT_CUSTOMER'
+                        : progress >= 0.35
+                        ? 'OUT_FOR_DELIVERY'
+                        : progress >= 0.2
+                        ? 'ARRIVED_AT_RESTAURANT'
+                        : 'GOING_TO_RESTAURANT';
+                    setTrackingOrder((prev) =>
+                      prev && prev.status !== nextStatus
+                        ? { ...prev, status: nextStatus }
+                        : prev
+                    );
+                  }}
                 />
 
-                {/* Courier Details Card */}
-                {liveTrackedOrder.delivery_partner_name && (
-                  <GlassCard className="p-4 flex items-center justify-between">
-                    <div>
-                      <p className="text-xs text-stone-500">
-                        Assigned Delivery Partner
-                      </p>
-                      <h4 className="text-base font-semibold text-stone-900">
-                        {liveTrackedOrder.delivery_partner_name}
-                      </h4>
+                {/* Courier Details Card or Real-Time Matching Indicator */}
+                {liveTrackedOrder.delivery_partner_name ? (
+                  <GlassCard className="p-4 flex items-center justify-between border-emerald-900/15 bg-emerald-900/5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-emerald-900 text-white flex items-center justify-center text-lg shadow-sm">
+                        🛵
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-700 animate-pulse" />
+                          <p className="text-xs text-stone-500 font-medium">
+                            Live Assigned Delivery Partner
+                          </p>
+                        </div>
+                        <h4 className="text-base font-bold text-stone-900 font-display">
+                          {liveTrackedOrder.delivery_partner_name}
+                        </h4>
+                      </div>
                     </div>
                     <div className="text-right">
-                      <span className="inline-flex items-center gap-1 text-sm font-semibold text-rose-600">
+                      <span className="inline-flex items-center gap-1 text-sm font-bold text-rose-600 font-mono">
                         <Star className="w-4 h-4 fill-rose-600 text-rose-600" />
                         {(
                           liveTrackedOrder.delivery_partner_rating || 5.0
                         ).toFixed(1)}
                       </span>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs font-semibold text-emerald-900 font-mono">
                         ETA {liveTrackedOrder.estimated_arrival}
                       </p>
                     </div>
                   </GlassCard>
+                ) : (
+                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-xs text-amber-950">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping shrink-0" />
+                      <div>
+                        <strong className="block font-semibold">
+                          Finding nearest Delivery Partner
+                        </strong>
+                        <span className="text-[11px] text-amber-800">
+                          Auto-assigning available courier the moment restaurant accepts your order.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -750,9 +842,15 @@ export const CustomerExperience: React.FC<{
                         {user.name ? `, ${user.name.split(' ')[0]}` : ''}.
                       </h1>
                     </div>
-                    <p className="text-xs text-slate-500 max-w-xs">
-                      Real-time menus and live kitchen tracking from neighborhood chefs.
-                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <GlassButton
+                        variant="secondary"
+                        onClick={handleLaunchDemoMap}
+                      >
+                        <MapPin className="w-4 h-4 text-rose-600" />
+                        <span>Preview Live Map</span>
+                      </GlassButton>
+                    </div>
                   </div>
 
                   <div className="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
@@ -1206,13 +1304,22 @@ export const CustomerExperience: React.FC<{
             {/* ORDERS VIEW */}
             {activeTab === 'orders' && (
               <section className="max-w-4xl mx-auto space-y-8 animate-fadeIn">
-                <div>
-                  <h1 className="text-2xl font-bold text-stone-900 font-display">
-                    Your Orders & Live Timeline
-                  </h1>
-                  <p className="text-xs text-stone-500 mt-0.5">
-                    Track active kitchen preparation or revisit past meals
-                  </p>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h1 className="text-2xl font-bold text-stone-900 font-display">
+                      Your Orders & Live Timeline
+                    </h1>
+                    <p className="text-xs text-stone-500 mt-0.5">
+                      Track active kitchen preparation or revisit past meals
+                    </p>
+                  </div>
+                  <GlassButton
+                    variant="secondary"
+                    onClick={handleLaunchDemoMap}
+                  >
+                    <MapPin className="w-4 h-4 text-rose-600" />
+                    <span>Preview Live Map</span>
+                  </GlassButton>
                 </div>
 
                 <div className="space-y-4">
@@ -1220,11 +1327,18 @@ export const CustomerExperience: React.FC<{
                     Active Orders ({activeOrders.length})
                   </h2>
                   {activeOrders.length === 0 ? (
-                    <GlassCard className="p-8 text-center space-y-2">
+                    <GlassCard className="p-8 text-center space-y-3">
                       <Clock className="w-6 h-6 text-stone-400 mx-auto" />
                       <p className="text-sm font-medium text-stone-700">
                         No active orders right now
                       </p>
+                      <GlassButton
+                        variant="primary"
+                        onClick={handleLaunchDemoMap}
+                      >
+                        <MapPin className="w-4 h-4" />
+                        <span>Launch Prototype Live Map</span>
+                      </GlassButton>
                     </GlassCard>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

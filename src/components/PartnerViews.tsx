@@ -17,6 +17,7 @@ import {
   ArrowUp,
   ArrowDown,
   FolderPlus,
+  MapPin,
 } from 'lucide-react';
 import {
   UserProfile,
@@ -43,6 +44,10 @@ import {
   OrderChatPanel,
 } from './GlassUI';
 import { InteractiveRouteMap } from './InteractiveMap';
+import {
+  watchDeviceLocation,
+  createPrototypeDemoOrder,
+} from '../services/locationApi';
 
 /* ==========================================================================
    1. RESTAURANT PARTNER EXPERIENCE
@@ -583,6 +588,20 @@ export const RestaurantPartnerExperience: React.FC<{
                       <p className="text-xs text-stone-600 py-2.5 border-y border-stone-200/60">
                         {order.items_summary}
                       </p>
+
+                      {order.delivery_partner_name && (
+                        <div className="p-3 rounded-2xl bg-emerald-900/5 border border-emerald-900/15 flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-700 animate-pulse" />
+                            <span className="font-semibold text-emerald-950">
+                              🛵 Assigned Courier: {order.delivery_partner_name}
+                            </span>
+                          </div>
+                          <span className="font-mono text-emerald-900 font-bold">
+                            ★{(order.delivery_partner_rating || 4.9).toFixed(1)} · ETA {order.estimated_arrival}
+                          </span>
+                        </div>
+                      )}
 
                       <div className="flex flex-wrap gap-2">
                         {order.status === 'ORDER_PLACED' && (
@@ -1501,6 +1520,11 @@ export const DeliveryPartnerExperience: React.FC<{
     nextStatus: OrderStatus,
     courierCoords?: [number, number]
   ) => Promise<void>;
+  onUpdateCourierLocation?: (
+    orderId: string,
+    coords: [number, number],
+    etaText?: string
+  ) => Promise<void>;
   onLogout: () => Promise<void>;
 }> = ({
   user,
@@ -1510,9 +1534,13 @@ export const DeliveryPartnerExperience: React.FC<{
   onToggleOnline,
   onUpdateRange,
   onAdvanceDeliveryState,
+  onUpdateCourierLocation,
   onLogout,
 }) => {
   const [activeTab, setActiveTab] = useState<DeliveryTab>('dashboard');
+  const [demoDelivery, setDemoDelivery] = useState<Order | null>(null);
+  const [isGpsStreaming, setIsGpsStreaming] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
   const isOnline = user.is_online ?? true;
   const rangeKm = user.delivery_range_km ?? 5;
 
@@ -1521,12 +1549,88 @@ export const DeliveryPartnerExperience: React.FC<{
     () =>
       orders.find(
         (o) =>
-          o.delivery_partner_uid === user.google_uid &&
+          (o.delivery_partner_uid === user.google_uid ||
+           o.delivery_partner_uid === user.id) &&
           o.status !== 'DELIVERED' &&
           o.status !== 'CANCELLED'
-      ) || null,
-    [orders, user.google_uid]
+      ) ||
+      // In local testing sessions, also permit viewing any recently assigned active order
+      orders.find(
+        (o) =>
+          Boolean(o.delivery_partner_uid) &&
+          o.status !== 'DELIVERED' &&
+          o.status !== 'CANCELLED'
+      ) ||
+      null,
+    [orders, user.google_uid, user.id]
   );
+
+  const effectiveActiveDelivery = activeDelivery || demoDelivery;
+
+  const handleLaunchDemoRoute = () => {
+    const demo = createPrototypeDemoOrder({
+      customerName: 'Aarav Mehta',
+      customerUid: 'demo-customer',
+      customerLocation: '4th Block, Koramangala, Bangalore',
+      courierName: user.name,
+      courierUid: user.google_uid,
+    });
+    setDemoDelivery({
+      ...demo,
+      status: 'GOING_TO_RESTAURANT',
+    });
+    setActiveTab('active');
+  };
+
+  const handleAdvanceEffectiveDelivery = async (
+    order: Order,
+    nextStatus: OrderStatus,
+    courierCoords?: [number, number]
+  ) => {
+    if (order.id === 'demo-biteq-2026') {
+      setDemoDelivery((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: nextStatus,
+              ...(courierCoords
+                ? { courier_lat: courierCoords[0], courier_lng: courierCoords[1] }
+                : {}),
+              estimated_arrival:
+                nextStatus === 'DELIVERED'
+                  ? 'Delivered'
+                  : nextStatus === 'ARRIVED_AT_CUSTOMER'
+                  ? 'Arriving now'
+                  : '10 min',
+            }
+          : prev
+      );
+      return;
+    }
+    await onAdvanceDeliveryState(order, nextStatus, courierCoords);
+  };
+
+  // Free Native Device GPS watcher (navigator.geolocation)
+  useEffect(() => {
+    if (
+      !isGpsStreaming ||
+      !effectiveActiveDelivery ||
+      effectiveActiveDelivery.id === 'demo-biteq-2026' ||
+      !onUpdateCourierLocation
+    )
+      return;
+    const stopWatch = watchDeviceLocation(
+      (pos) => {
+        setGpsError(null);
+        onUpdateCourierLocation(effectiveActiveDelivery.id, [pos.lat, pos.lng]);
+      },
+      (err) => {
+        setGpsError(err.message || 'Device GPS signal unavailable');
+        setIsGpsStreaming(false);
+      }
+    );
+    return () => stopWatch();
+  }, [isGpsStreaming, effectiveActiveDelivery?.id, onUpdateCourierLocation]);
 
   // Available nearby dispatches when ONLINE
   const availableRequests = useMemo(() => {
@@ -1596,7 +1700,7 @@ export const DeliveryPartnerExperience: React.FC<{
             variant="primary"
             fullWidth
             onClick={() =>
-              onAdvanceDeliveryState(order, 'GOING_TO_RESTAURANT', [
+              handleAdvanceEffectiveDelivery(order, 'GOING_TO_RESTAURANT', [
                 (order.restaurant_lat || 12.9784) - 0.008,
                 (order.restaurant_lng || 77.6408) - 0.008,
               ])
@@ -1611,7 +1715,7 @@ export const DeliveryPartnerExperience: React.FC<{
             variant="primary"
             fullWidth
             onClick={() =>
-              onAdvanceDeliveryState(order, 'ARRIVED_AT_RESTAURANT', [
+              handleAdvanceEffectiveDelivery(order, 'ARRIVED_AT_RESTAURANT', [
                 order.restaurant_lat || 12.9784,
                 order.restaurant_lng || 77.6408,
               ])
@@ -1626,7 +1730,7 @@ export const DeliveryPartnerExperience: React.FC<{
             variant="primary"
             fullWidth
             onClick={() =>
-              onAdvanceDeliveryState(order, 'OUT_FOR_DELIVERY', [
+              handleAdvanceEffectiveDelivery(order, 'OUT_FOR_DELIVERY', [
                 ((order.restaurant_lat || 12.9784) +
                   (order.delivery_lat || 12.961)) /
                   2,
@@ -1645,7 +1749,7 @@ export const DeliveryPartnerExperience: React.FC<{
             variant="primary"
             fullWidth
             onClick={() =>
-              onAdvanceDeliveryState(order, 'ARRIVED_AT_CUSTOMER', [
+              handleAdvanceEffectiveDelivery(order, 'ARRIVED_AT_CUSTOMER', [
                 order.delivery_lat || 12.961,
                 order.delivery_lng || 77.638,
               ])
@@ -1660,7 +1764,7 @@ export const DeliveryPartnerExperience: React.FC<{
             variant="primary"
             fullWidth
             onClick={() =>
-              onAdvanceDeliveryState(order, 'DELIVERED', [
+              handleAdvanceEffectiveDelivery(order, 'DELIVERED', [
                 order.delivery_lat || 12.961,
                 order.delivery_lng || 77.638,
               ])
@@ -1670,13 +1774,29 @@ export const DeliveryPartnerExperience: React.FC<{
             <span>Mark Delivered</span>
           </GlassButton>
         );
+      case 'DELIVERED':
+        return (
+          <GlassButton
+            variant="secondary"
+            fullWidth
+            onClick={() => {
+              if (order.id === 'demo-biteq-2026') {
+                setDemoDelivery((prev) =>
+                  prev ? { ...prev, status: 'GOING_TO_RESTAURANT' } : null
+                );
+              }
+            }}
+          >
+            Restart Demo Delivery
+          </GlassButton>
+        );
       default:
         return (
           <GlassButton
             variant="primary"
             fullWidth
             onClick={() =>
-              onAdvanceDeliveryState(order, 'COURIER_ACCEPTED', [
+              handleAdvanceEffectiveDelivery(order, 'COURIER_ACCEPTED', [
                 (order.restaurant_lat || 12.9784) - 0.01,
                 (order.restaurant_lng || 77.6408) - 0.01,
               ])
@@ -1841,20 +1961,29 @@ export const DeliveryPartnerExperience: React.FC<{
                 ACTIVE DELIVERY
               </h2>
 
-              {!activeDelivery ? (
+              {!effectiveActiveDelivery ? (
                 <GlassCard className="p-8 text-center space-y-3">
                   <Bike className="w-7 h-7 text-stone-400 mx-auto" />
                   <p className="text-sm font-semibold text-stone-800">
                     No active delivery
                   </p>
-                  {!isOnline && (
+                  <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+                    {!isOnline && (
+                      <GlassButton
+                        variant="primary"
+                        onClick={() => onToggleOnline(true)}
+                      >
+                        Go Online
+                      </GlassButton>
+                    )}
                     <GlassButton
-                      variant="primary"
-                      onClick={() => onToggleOnline(true)}
+                      variant="secondary"
+                      onClick={handleLaunchDemoRoute}
                     >
-                      Go Online
+                      <MapPin className="w-4 h-4 text-rose-600" />
+                      <span>Launch Demo Route</span>
                     </GlassButton>
-                  )}
+                  </div>
                 </GlassCard>
               ) : (
                 <GlassCard
@@ -1863,16 +1992,16 @@ export const DeliveryPartnerExperience: React.FC<{
                 >
                   <div className="space-y-1">
                     <span className="text-xs font-mono font-semibold text-emerald-900">
-                      Order #{activeDelivery.id.slice(-5).toUpperCase()} ·{' '}
-                      {activeDelivery.status.replace(/_/g, ' ')}
+                      Order #{effectiveActiveDelivery.id.slice(-5).toUpperCase()} ·{' '}
+                      {effectiveActiveDelivery.status.replace(/_/g, ' ')}
                     </span>
                     <h3 className="text-xl font-bold text-stone-900 font-display">
-                      {activeDelivery.restaurant_name}
+                      {effectiveActiveDelivery.restaurant_name}
                     </h3>
                     <p className="text-xs text-stone-600">
-                      Pickup: 2.1 km away ({activeDelivery.restaurant_location})
-                      · Customer: {activeDelivery.distance_km} km away (
-                      {activeDelivery.delivery_address})
+                      Pickup: 2.1 km away ({effectiveActiveDelivery.restaurant_location})
+                      · Customer: {effectiveActiveDelivery.distance_km} km away (
+                      {effectiveActiveDelivery.delivery_address})
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -1966,97 +2095,184 @@ export const DeliveryPartnerExperience: React.FC<{
           </section>
         )}
 
-        {/* DEDICATED ACTIVE DELIVERY ROUTE SCREEN WITH REAL INTERACTIVE LEAFLET MAP */}
+        {/* DEDICATED ACTIVE DELIVERY ROUTE SCREEN WITH HYBRID INTERACTIVE MAP */}
         {activeTab === 'active' && (
           <section className="space-y-6 animate-fadeIn">
-            <div>
-              <h1 className="text-2xl font-bold text-stone-900 font-display">
-                ACTIVE DELIVERY ROUTE
-              </h1>
-              <p className="text-xs text-stone-500 mt-0.5">
-                Live route navigation, pickup & drop-off waypoints, and status
-                progression
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-stone-900 font-display">
+                  ACTIVE DELIVERY ROUTE
+                </h1>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  Live route navigation, pickup & drop-off waypoints, and status
+                  progression
+                </p>
+              </div>
+              {effectiveActiveDelivery?.id === 'demo-biteq-2026' && (
+                <GlassButton
+                  variant="subtle"
+                  onClick={() => setDemoDelivery(null)}
+                >
+                  Exit Demo Route
+                </GlassButton>
+              )}
             </div>
 
-            {!activeDelivery ? (
+            {!effectiveActiveDelivery ? (
               <GlassCard className="p-12 text-center space-y-4">
                 <Navigation className="w-8 h-8 text-stone-400 mx-auto" />
                 <h3 className="text-lg font-semibold text-stone-900 font-display">
                   No active delivery right now
                 </h3>
                 <p className="text-xs text-stone-500 max-w-sm mx-auto">
-                  Accept a delivery opportunity from the Dispatch Radar to
-                  launch turn-by-turn route tracking.
+                  Accept a delivery opportunity from the Dispatch Radar or
+                  launch a prototype route to demonstrate live navigation.
                 </p>
-                <GlassButton
-                  variant="primary"
-                  onClick={() => setActiveTab('dashboard')}
-                >
-                  Open Dispatch Radar
-                </GlassButton>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <GlassButton
+                    variant="primary"
+                    onClick={handleLaunchDemoRoute}
+                  >
+                    <MapPin className="w-4 h-4" />
+                    <span>Launch Demo Route</span>
+                  </GlassButton>
+                  <GlassButton
+                    variant="secondary"
+                    onClick={() => setActiveTab('dashboard')}
+                  >
+                    Open Dispatch Radar
+                  </GlassButton>
+                </div>
               </GlassCard>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                <div className="lg:col-span-7">
+                <div className="lg:col-span-7 space-y-4">
                   <InteractiveRouteMap
-                    restaurantName={activeDelivery.restaurant_name}
+                    restaurantName={effectiveActiveDelivery.restaurant_name}
                     restaurantCoords={[
-                      activeDelivery.restaurant_lat || 12.9784,
-                      activeDelivery.restaurant_lng || 77.6408,
+                      effectiveActiveDelivery.restaurant_lat || 12.9784,
+                      effectiveActiveDelivery.restaurant_lng || 77.6408,
                     ]}
-                    customerName={activeDelivery.customer_name}
-                    customerAddress={activeDelivery.delivery_address}
+                    customerName={effectiveActiveDelivery.customer_name}
+                    customerAddress={effectiveActiveDelivery.delivery_address}
                     customerCoords={[
-                      activeDelivery.delivery_lat || 12.961,
-                      activeDelivery.delivery_lng || 77.638,
+                      effectiveActiveDelivery.delivery_lat || 12.961,
+                      effectiveActiveDelivery.delivery_lng || 77.638,
                     ]}
                     courierName={user.name}
                     courierCoords={[
-                      activeDelivery.courier_lat ||
-                        (activeDelivery.restaurant_lat || 12.9784) - 0.005,
-                      activeDelivery.courier_lng ||
-                        (activeDelivery.restaurant_lng || 77.6408) - 0.005,
+                      effectiveActiveDelivery.courier_lat ||
+                        (effectiveActiveDelivery.restaurant_lat || 12.9784) - 0.005,
+                      effectiveActiveDelivery.courier_lng ||
+                        (effectiveActiveDelivery.restaurant_lng || 77.6408) - 0.005,
                     ]}
-                    etaText={activeDelivery.estimated_arrival}
-                    distanceKm={activeDelivery.distance_km}
-                    statusLabel={`ACTIVE DELIVERY • ${activeDelivery.status.replace(
+                    etaText={effectiveActiveDelivery.estimated_arrival}
+                    distanceKm={effectiveActiveDelivery.distance_km}
+                    statusLabel={`ACTIVE DELIVERY · ${effectiveActiveDelivery.status.replace(
                       /_/g,
                       ' '
                     )}`}
                     showNavigateButton
+                    onUpdateCoords={(coords, eta) => {
+                      if (effectiveActiveDelivery.id === 'demo-biteq-2026') {
+                        setDemoDelivery((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                courier_lat: coords[0],
+                                courier_lng: coords[1],
+                                ...(eta ? { estimated_arrival: eta } : {}),
+                              }
+                            : prev
+                        );
+                      } else {
+                        onUpdateCourierLocation?.(
+                          effectiveActiveDelivery.id,
+                          coords,
+                          eta
+                        );
+                      }
+                    }}
+                    onProgressChange={(progress) => {
+                      if (effectiveActiveDelivery.id !== 'demo-biteq-2026')
+                        return;
+                      const nextStatus: OrderStatus =
+                        progress >= 0.98
+                          ? 'DELIVERED'
+                          : progress >= 0.85
+                          ? 'ARRIVED_AT_CUSTOMER'
+                          : progress >= 0.35
+                          ? 'OUT_FOR_DELIVERY'
+                          : progress >= 0.2
+                          ? 'ARRIVED_AT_RESTAURANT'
+                          : 'GOING_TO_RESTAURANT';
+                      setDemoDelivery((prev) =>
+                        prev && prev.status !== nextStatus
+                          ? { ...prev, status: nextStatus }
+                          : prev
+                      );
+                    }}
                   />
+
+                  {/* Free API Hardware GPS Broadcaster Toggle */}
+                  <GlassCard className="p-4 flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-emerald-900/5 to-blue-900/5 border-emerald-900/20">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-stone-900">
+                          {isGpsStreaming
+                            ? 'Streaming Device GPS to Customer & Kitchen'
+                            : 'Hardware GPS Broadcaster (Free API)'}
+                        </h4>
+                      </div>
+                      <p className="text-[11px] text-stone-500">
+                        {isGpsStreaming
+                          ? 'Using HTML5 Geolocation API to transmit real phone/laptop coordinates.'
+                          : 'Turn on to broadcast your real-world coordinates directly to customer live map.'}
+                      </p>
+                      {gpsError && (
+                        <p className="text-[11px] text-rose-600 font-semibold">
+                          {gpsError}
+                        </p>
+                      )}
+                    </div>
+                    <GlassButton
+                      variant={isGpsStreaming ? 'danger' : 'primary'}
+                      onClick={() => setIsGpsStreaming(!isGpsStreaming)}
+                    >
+                      {isGpsStreaming ? 'Stop Broadcasting' : 'Broadcast My Live GPS'}
+                    </GlassButton>
+                  </GlassCard>
                 </div>
 
                 <div className="lg:col-span-5 space-y-5">
                   <GlassCard elevated className="p-6 space-y-5">
                     <div className="space-y-2">
                       <span className="text-xs font-mono font-semibold text-emerald-900">
-                        Order #{activeDelivery.id.slice(-6).toUpperCase()}
+                        Order #{effectiveActiveDelivery.id.slice(-6).toUpperCase()}
                       </span>
                       <div className="space-y-1">
                         <p className="text-xs text-stone-500">Restaurant</p>
                         <h3 className="text-base font-bold text-stone-900">
-                          {activeDelivery.restaurant_name}
+                          {effectiveActiveDelivery.restaurant_name}
                         </h3>
                         <p className="text-xs text-stone-600">
-                          Pickup: {activeDelivery.restaurant_location}
+                          Pickup: {effectiveActiveDelivery.restaurant_location}
                         </p>
                       </div>
 
                       <div className="pt-2 border-t border-stone-200/60 space-y-1">
                         <p className="text-xs text-stone-500">Customer</p>
                         <h4 className="text-base font-bold text-stone-900">
-                          {activeDelivery.customer_name}
+                          {effectiveActiveDelivery.customer_name}
                         </h4>
                         <p className="text-xs text-stone-600">
-                          Drop-off: {activeDelivery.delivery_address}
+                          Drop-off: {effectiveActiveDelivery.delivery_address}
                         </p>
                       </div>
 
-                      <div className="pt-2 border-t border-stone-200/60 flex items-center justify-between text-xs font-mono">
-                        <span>ETA: {activeDelivery.estimated_arrival}</span>
-                        <span>Distance: {activeDelivery.distance_km} km</span>
+                      <div className="pt-2 border-t border-stone-200/60 flex items-center justify-between text-xs font-mono tabular-nums">
+                        <span>ETA: {effectiveActiveDelivery.estimated_arrival}</span>
+                        <span>Distance: {effectiveActiveDelivery.distance_km} km</span>
                       </div>
                     </div>
 
@@ -2081,7 +2297,7 @@ export const DeliveryPartnerExperience: React.FC<{
                           { id: 'DELIVERED', label: 'DELIVERED' },
                         ] as { id: OrderStatus; label: string }[]
                       ).map((st) => {
-                        const isCurrent = activeDelivery.status === st.id;
+                        const isCurrent = effectiveActiveDelivery.status === st.id;
                         return (
                           <div
                             key={st.id}
@@ -2106,12 +2322,12 @@ export const DeliveryPartnerExperience: React.FC<{
 
                     {/* Dynamic Action CTA */}
                     <div className="pt-2">
-                      {renderCourierNextActionButton(activeDelivery)}
+                      {renderCourierNextActionButton(effectiveActiveDelivery)}
                     </div>
                   </GlassCard>
 
                   <OrderChatPanel
-                    orderId={activeDelivery.id}
+                    orderId={effectiveActiveDelivery.id}
                     currentUserRole="delivery_partner"
                     messages={orderMessages}
                     onSendMessage={onSendOrderMessage}

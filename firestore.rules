@@ -113,9 +113,15 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      // PII Isolation: Only the authenticated owner can read their own profile
-      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
-      allow list: if isSignedIn() && resource.data.google_uid == request.auth.uid;
+      // PII Isolation: Only the authenticated owner or delivery partner discovery for dispatch
+      allow get: if isSignedIn() && isValidId(userId) && (
+        request.auth.uid == userId ||
+        resource.data.role == 'delivery_partner'
+      );
+      allow list: if isSignedIn() && (
+        resource.data.google_uid == request.auth.uid ||
+        resource.data.role == 'delivery_partner'
+      );
 
       allow create: if isVerified() &&
                     isValidId(userId) &&
@@ -632,10 +638,16 @@ service cloud.firestore {
                     incoming().restaurant_id == existing().restaurant_id &&
                     incoming().created_at == existing().created_at &&
                     incoming().updated_at == request.time && (
-                      // Action 1: Restaurant Owner updates kitchen preparation stage
+                      // Action 1: Restaurant Owner updates kitchen stage and/or assigns a delivery partner
                       (existing().restaurant_owner_uid == request.auth.uid &&
                        incoming().diff(existing()).affectedKeys().hasOnly([
                         'status',
+                        'delivery_partner_uid',
+                        'delivery_partner_name',
+                        'delivery_partner_rating',
+                        'courier_lat',
+                        'courier_lng',
+                        'accepted_at',
                         'estimated_arrival',
                         'updated_at'
                       ])) ||
@@ -654,7 +666,10 @@ service cloud.firestore {
                         'delivered_at',
                         'estimated_arrival',
                         'updated_at'
-                      ]) && incoming().delivery_partner_uid == request.auth.uid)
+                      ]) && (
+                        incoming().delivery_partner_uid == request.auth.uid ||
+                        existing().delivery_partner_uid == request.auth.uid
+                      ))
                     );
     }
 
