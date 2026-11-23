@@ -558,6 +558,9 @@ service cloud.firestore {
                'coupon_code',
                'taxes',
                'total',
+               'payment_method',
+               'payment_status',
+               'payment_detail',
                'status',
                'estimated_arrival',
                'distance_km',
@@ -593,6 +596,18 @@ service cloud.firestore {
              (!('coupon_code' in data) || (data.coupon_code is string && data.coupon_code.size() <= 30)) &&
              data.taxes is number && data.taxes >= 0 &&
              data.total is number && data.total >= 0 &&
+             (!('payment_method' in data) || (data.payment_method is string && (
+               data.payment_method == 'UPI' ||
+               data.payment_method == 'CARD' ||
+               data.payment_method == 'NET_BANKING' ||
+               data.payment_method == 'WALLET' ||
+               data.payment_method == 'COD'
+             ))) &&
+             (!('payment_status' in data) || (data.payment_status is string && (
+               data.payment_status == 'PAID' ||
+               data.payment_status == 'PENDING_COD'
+             ))) &&
+             (!('payment_detail' in data) || (data.payment_detail is string && data.payment_detail.size() <= 80)) &&
              data.status is string && (
                data.status == 'ORDER_PLACED' ||
                data.status == 'RESTAURANT_ACCEPTED' ||
@@ -651,7 +666,7 @@ service cloud.firestore {
                         'estimated_arrival',
                         'updated_at'
                       ])) ||
-                      // Action 2: Delivery Partner accepts, navigates, updates live coordinates, or marks delivered
+                      // Action 2: Delivery Partner accepts, navigates, updates live coordinates, or marks delivered (marking COD paid on delivery)
                       (incoming().diff(existing()).affectedKeys().hasOnly([
                         'status',
                         'delivery_partner_uid',
@@ -664,9 +679,14 @@ service cloud.firestore {
                         'picked_up_at',
                         'arrived_at_customer_at',
                         'delivered_at',
+                        'payment_status',
                         'estimated_arrival',
                         'updated_at'
                       ]) && (
+                        !('payment_status' in incoming()) ||
+                        (('payment_status' in existing()) && incoming().payment_status == existing().payment_status) ||
+                        incoming().status == 'DELIVERED'
+                      ) && (
                         incoming().delivery_partner_uid == request.auth.uid ||
                         existing().delivery_partner_uid == request.auth.uid
                       ))

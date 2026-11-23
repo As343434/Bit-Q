@@ -1414,6 +1414,28 @@ export const OrderCard: React.FC<{
         {order.items_summary}
       </p>
 
+      {order.payment_method && (
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-stone-500">
+            Payment:{' '}
+            <strong className="text-stone-800">
+              {order.payment_detail || order.payment_method}
+            </strong>
+          </span>
+          <span
+            className={`font-semibold ${
+              order.payment_status === 'PAID'
+                ? 'text-emerald-800'
+                : 'text-amber-700'
+            }`}
+          >
+            {order.payment_status === 'PAID'
+              ? 'Paid ✓'
+              : 'Pay on Delivery'}
+          </span>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1.5 text-xs text-slate-600">
           <Clock className="w-3.5 h-3.5 text-rose-600" />

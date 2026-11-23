@@ -128,6 +128,9 @@ export type OrderStatus =
   | 'DELIVERED'
   | 'CANCELLED';
 
+export type PaymentMethod = 'UPI' | 'CARD' | 'NET_BANKING' | 'WALLET' | 'COD';
+export type PaymentStatus = 'PAID' | 'PENDING_COD';
+
 export interface Order {
   id: string;
   customer_uid: string;
@@ -154,6 +157,9 @@ export interface Order {
   coupon_code?: string;
   taxes: number;
   total: number;
+  payment_method?: PaymentMethod;
+  payment_status?: PaymentStatus;
+  payment_detail?: string;
   status: OrderStatus;
   estimated_arrival: string;
   distance_km: number;

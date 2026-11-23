@@ -13,6 +13,12 @@ import {
   AlertCircle,
   Check,
   MapPin,
+  Smartphone,
+  CreditCard,
+  Landmark,
+  Wallet,
+  Banknote,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   UserProfile,
@@ -27,6 +33,8 @@ import {
   GeoLocationData,
   StoreRating,
   OrderChatMessage,
+  PaymentMethod,
+  PaymentStatus,
 } from '../types';
 import { FOOD_CATEGORIES } from '../seedData';
 import {
@@ -82,6 +90,9 @@ export const CustomerExperience: React.FC<{
     couponCode?: string;
     taxes: number;
     total: number;
+    paymentMethod: PaymentMethod;
+    paymentStatus: PaymentStatus;
+    paymentDetail: string;
   }) => Promise<Order | null>;
   onSubmitSupportTicket: (ticket: {
     category: SupportCategory;
@@ -124,12 +135,25 @@ export const CustomerExperience: React.FC<{
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedMenuSection, setSelectedMenuSection] = useState<string>('All');
 
-  // Cart & Coupon state
+  // Cart, Coupon & Payment state
   const [cart, setCart] = useState<CartItem[]>([]);
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+
+  // Payment Options state
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('UPI');
+  const [upiApp, setUpiApp] = useState<string>('Google Pay');
+  const [upiId, setUpiId] = useState('');
+  const [useSavedCard, setUseSavedCard] = useState(true);
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [cardName, setCardName] = useState(user.name);
+  const [selectedBank, setSelectedBank] = useState('HDFC Bank');
+  const [selectedWallet, setSelectedWallet] = useState('Amazon Pay');
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   // Support form state
   const [ticketCategory, setTicketCategory] =
@@ -326,6 +350,50 @@ export const CustomerExperience: React.FC<{
 
   const handleCheckout = async () => {
     if (cart.length === 0 || isCheckingOut) return;
+    setPaymentError(null);
+
+    let paymentStatus: PaymentStatus = 'PAID';
+    let paymentDetail = `${upiApp} · Instant UPI`;
+
+    if (paymentMethod === 'UPI') {
+      const trimmedUpi = upiId.trim();
+      if (trimmedUpi && !trimmedUpi.includes('@')) {
+        setPaymentError('Enter a valid UPI ID (e.g. name@okaxis) or leave blank to use quick app pay.');
+        return;
+      }
+      paymentStatus = 'PAID';
+      paymentDetail = trimmedUpi ? `UPI · ${trimmedUpi}` : `${upiApp} · Instant UPI`;
+    } else if (paymentMethod === 'CARD') {
+      if (useSavedCard) {
+        paymentDetail = 'Visa •••• 4242';
+      } else {
+        const digits = cardNumber.replace(/\D/g, '');
+        if (digits.length < 12 || digits.length > 19) {
+          setPaymentError('Please enter a valid 12–16 digit card number.');
+          return;
+        }
+        if (!/^\d{2}\/\d{2}$/.test(cardExpiry.trim())) {
+          setPaymentError('Please enter card expiry in MM/YY format.');
+          return;
+        }
+        if (cardCvv.replace(/\D/g, '').length < 3) {
+          setPaymentError('Please enter a valid 3 or 4 digit CVV.');
+          return;
+        }
+        paymentDetail = `Card •••• ${digits.slice(-4)}`;
+      }
+      paymentStatus = 'PAID';
+    } else if (paymentMethod === 'NET_BANKING') {
+      paymentStatus = 'PAID';
+      paymentDetail = `${selectedBank} NetBanking`;
+    } else if (paymentMethod === 'WALLET') {
+      paymentStatus = 'PAID';
+      paymentDetail = selectedWallet;
+    } else if (paymentMethod === 'COD') {
+      paymentStatus = 'PENDING_COD';
+      paymentDetail = 'Cash / QR on Delivery';
+    }
+
     setIsCheckingOut(true);
     try {
       const created = await onPlaceOrder({
@@ -337,6 +405,9 @@ export const CustomerExperience: React.FC<{
         couponCode: appliedCoupon?.code,
         taxes: cartTaxes,
         total: cartTotal,
+        paymentMethod,
+        paymentStatus,
+        paymentDetail,
       });
       if (created) {
         setCart([]);
@@ -665,8 +736,31 @@ export const CustomerExperience: React.FC<{
                     <p className="text-stone-600 leading-relaxed">
                       {liveTrackedOrder.items_summary}
                     </p>
+                    {liveTrackedOrder.payment_method && (
+                      <div className="flex items-center justify-between pt-2 text-stone-600">
+                        <span>
+                          {liveTrackedOrder.payment_detail ||
+                            liveTrackedOrder.payment_method}
+                        </span>
+                        <span
+                          className={`font-semibold ${
+                            liveTrackedOrder.payment_status === 'PAID'
+                              ? 'text-emerald-800'
+                              : 'text-amber-700'
+                          }`}
+                        >
+                          {liveTrackedOrder.payment_status === 'PAID'
+                            ? 'Paid ✓'
+                            : 'Pay on Delivery'}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between pt-2 font-mono text-sm font-semibold text-stone-900 tabular-nums">
-                      <span>Total Paid</span>
+                      <span>
+                        {liveTrackedOrder.payment_status === 'PENDING_COD'
+                          ? 'Amount Due on Delivery'
+                          : 'Total Paid'}
+                      </span>
                       <span>₹{liveTrackedOrder.total.toFixed(0)}</span>
                     </div>
                   </div>
@@ -1267,6 +1361,300 @@ export const CustomerExperience: React.FC<{
                           </div>
                         )}
                       </GlassCard>
+                      {/* Payment Method Selector */}
+                      <GlassCard className="p-5 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                            <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                            <span>Choose Payment Method</span>
+                          </h4>
+                          <span className="text-[11px] font-medium text-slate-500">
+                            100% Secure Checkout
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                          {(
+                            [
+                              {
+                                id: 'UPI',
+                                label: 'UPI',
+                                sub: 'GPay / PhonePe',
+                                Icon: Smartphone,
+                              },
+                              {
+                                id: 'CARD',
+                                label: 'Card',
+                                sub: 'Credit / Debit',
+                                Icon: CreditCard,
+                              },
+                              {
+                                id: 'NET_BANKING',
+                                label: 'NetBanking',
+                                sub: 'All Banks',
+                                Icon: Landmark,
+                              },
+                              {
+                                id: 'WALLET',
+                                label: 'Wallets',
+                                sub: 'Paytm / Amazon',
+                                Icon: Wallet,
+                              },
+                              {
+                                id: 'COD',
+                                label: 'Cash (COD)',
+                                sub: 'Pay on Arrival',
+                                Icon: Banknote,
+                              },
+                            ] as const
+                          ).map(({ id, label, sub, Icon }) => {
+                            const active = paymentMethod === id;
+                            return (
+                              <button
+                                key={id}
+                                type="button"
+                                onClick={() => {
+                                  setPaymentMethod(id);
+                                  setPaymentError(null);
+                                }}
+                                className={`p-3 rounded-2xl border text-left transition-all flex flex-col gap-1 ${
+                                  active
+                                    ? 'bg-gradient-to-br from-rose-600/10 to-blue-600/10 border-rose-600 ring-2 ring-rose-500/15'
+                                    : 'bg-white/80 border-slate-200 hover:bg-white'
+                                }`}
+                              >
+                                <Icon
+                                  className={`w-4 h-4 ${
+                                    active ? 'text-rose-600' : 'text-slate-600'
+                                  }`}
+                                />
+                                <span className="text-xs font-bold text-slate-900 whitespace-nowrap">
+                                  {label}
+                                </span>
+                                <span className="text-[10px] text-slate-500 truncate">
+                                  {sub}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* UPI Details */}
+                        {paymentMethod === 'UPI' && (
+                          <div className="p-4 rounded-2xl bg-slate-50/90 border border-slate-200/80 space-y-3">
+                            <p className="text-xs font-medium text-slate-700">
+                              Select UPI App or enter your UPI ID
+                            </p>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                              {['Google Pay', 'PhonePe', 'Paytm UPI', 'BHIM'].map(
+                                (app) => (
+                                  <button
+                                    key={app}
+                                    type="button"
+                                    onClick={() => setUpiApp(app)}
+                                    className={`min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors whitespace-nowrap ${
+                                      upiApp === app
+                                        ? 'bg-slate-900 text-white border-slate-900'
+                                        : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                                    }`}
+                                  >
+                                    {app}
+                                  </button>
+                                )
+                              )}
+                            </div>
+                            <input
+                              type="text"
+                              value={upiId}
+                              onChange={(e) => setUpiId(e.target.value)}
+                              placeholder="Optional UPI ID (e.g. name@okaxis)"
+                              className="w-full min-h-[44px] px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs focus:outline-none focus:border-rose-600"
+                            />
+                          </div>
+                        )}
+
+                        {/* Card Details */}
+                        {paymentMethod === 'CARD' && (
+                          <div className="p-4 rounded-2xl bg-slate-50/90 border border-slate-200/80 space-y-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-xs font-medium text-slate-700">
+                                Credit / Debit Card
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setUseSavedCard(true)}
+                                  className={`px-3 py-1 rounded-xl text-xs font-semibold border ${
+                                    useSavedCard
+                                      ? 'bg-slate-900 text-white border-slate-900'
+                                      : 'bg-white text-slate-700 border-slate-200'
+                                  }`}
+                                >
+                                  Visa •••• 4242
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setUseSavedCard(false)}
+                                  className={`px-3 py-1 rounded-xl text-xs font-semibold border ${
+                                    !useSavedCard
+                                      ? 'bg-slate-900 text-white border-slate-900'
+                                      : 'bg-white text-slate-700 border-slate-200'
+                                  }`}
+                                >
+                                  New Card
+                                </button>
+                              </div>
+                            </div>
+
+                            {useSavedCard ? (
+                              <div className="p-3 rounded-xl bg-white border border-slate-200 flex items-center justify-between text-xs">
+                                <div>
+                                  <p className="font-semibold text-slate-900 font-mono">
+                                    •••• •••• •••• 4242
+                                  </p>
+                                  <p className="text-[11px] text-slate-500">
+                                    HDFC Visa Signature · Exp 09/28
+                                  </p>
+                                </div>
+                                <span className="text-emerald-700 font-semibold">
+                                  Verified ✓
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="space-y-2.5">
+                                <input
+                                  type="text"
+                                  value={cardNumber}
+                                  onChange={(e) => {
+                                    const raw = e.target.value
+                                      .replace(/\D/g, '')
+                                      .slice(0, 16);
+                                    const grouped = raw.replace(
+                                      /(.{4})/g,
+                                      '$1 '
+                                    ).trim();
+                                    setCardNumber(grouped);
+                                  }}
+                                  placeholder="Card Number (e.g. 4532 1234 5678 9010)"
+                                  className="w-full min-h-[42px] px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs font-mono focus:outline-none focus:border-rose-600"
+                                />
+                                <div className="grid grid-cols-3 gap-2">
+                                  <input
+                                    type="text"
+                                    value={cardExpiry}
+                                    onChange={(e) => {
+                                      const v = e.target.value
+                                        .replace(/[^\d/]/g, '')
+                                        .slice(0, 5);
+                                      setCardExpiry(v);
+                                    }}
+                                    placeholder="MM/YY"
+                                    className="min-h-[42px] px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-mono focus:outline-none focus:border-rose-600"
+                                  />
+                                  <input
+                                    type="password"
+                                    value={cardCvv}
+                                    onChange={(e) =>
+                                      setCardCvv(
+                                        e.target.value.replace(/\D/g, '').slice(0, 4)
+                                      )
+                                    }
+                                    placeholder="CVV"
+                                    className="min-h-[42px] px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-mono focus:outline-none focus:border-rose-600"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={cardName}
+                                    onChange={(e) => setCardName(e.target.value)}
+                                    placeholder="Cardholder Name"
+                                    className="min-h-[42px] px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs focus:outline-none focus:border-rose-600"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* NetBanking Details */}
+                        {paymentMethod === 'NET_BANKING' && (
+                          <div className="p-4 rounded-2xl bg-slate-50/90 border border-slate-200/80 space-y-2.5">
+                            <p className="text-xs font-medium text-slate-700">
+                              Select your Bank
+                            </p>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {[
+                                'HDFC Bank',
+                                'ICICI Bank',
+                                'State Bank of India',
+                                'Axis Bank',
+                                'Kotak Mahindra',
+                              ].map((bank) => (
+                                <button
+                                  key={bank}
+                                  type="button"
+                                  onClick={() => setSelectedBank(bank)}
+                                  className={`min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors text-left truncate ${
+                                    selectedBank === bank
+                                      ? 'bg-slate-900 text-white border-slate-900'
+                                      : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                                  }`}
+                                >
+                                  {bank}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Wallets Details */}
+                        {paymentMethod === 'WALLET' && (
+                          <div className="p-4 rounded-2xl bg-slate-50/90 border border-slate-200/80 space-y-2.5">
+                            <p className="text-xs font-medium text-slate-700">
+                              Choose Digital Wallet
+                            </p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[
+                                'Amazon Pay',
+                                'Paytm Wallet',
+                                'PhonePe Wallet',
+                                'MobiKwik',
+                              ].map((wal) => (
+                                <button
+                                  key={wal}
+                                  type="button"
+                                  onClick={() => setSelectedWallet(wal)}
+                                  className={`min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors text-left ${
+                                    selectedWallet === wal
+                                      ? 'bg-slate-900 text-white border-slate-900'
+                                      : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                                  }`}
+                                >
+                                  {wal}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Cash on Delivery Details */}
+                        {paymentMethod === 'COD' && (
+                          <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-200 text-xs text-amber-950 space-y-1">
+                            <p className="font-semibold">
+                              Cash / Pay-on-Delivery Selected
+                            </p>
+                            <p className="text-[11px] text-amber-900">
+                              Pay ₹{cartTotal.toFixed(0)} in cash or scan the courier&apos;s UPI QR when your order arrives at your doorstep.
+                            </p>
+                          </div>
+                        )}
+
+                        {paymentError && (
+                          <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 flex items-center gap-2 text-xs text-rose-900">
+                            <AlertCircle className="w-4 h-4 text-rose-700 shrink-0" />
+                            <span>{paymentError}</span>
+                          </div>
+                        )}
+                      </GlassCard>
                     </div>
 
                     {/* Bill Breakdown & Checkout CTA */}
@@ -1301,11 +1689,28 @@ export const CustomerExperience: React.FC<{
 
                         <div className="pt-3 border-t border-stone-200/70 flex items-baseline justify-between">
                           <span className="text-sm font-semibold text-stone-900">
-                            Total
+                            {paymentMethod === 'COD' ? 'Pay on Delivery' : 'To Pay'}
                           </span>
                           <span className="text-xl font-mono font-bold text-stone-900 tabular-nums">
                             ₹{cartTotal.toFixed(0)}
                           </span>
+                        </div>
+
+                        <div className="px-3 py-2 rounded-xl bg-slate-100/80 text-xs text-slate-600 flex items-center justify-between">
+                          <span>Selected Method</span>
+                          <strong className="text-slate-900">
+                            {paymentMethod === 'UPI'
+                              ? upiId.trim() || upiApp
+                              : paymentMethod === 'CARD'
+                              ? useSavedCard
+                                ? 'Visa •••• 4242'
+                                : 'Credit / Debit Card'
+                              : paymentMethod === 'NET_BANKING'
+                              ? selectedBank
+                              : paymentMethod === 'WALLET'
+                              ? selectedWallet
+                              : 'Cash on Delivery'}
+                          </strong>
                         </div>
 
                         <GlassButton
@@ -1316,7 +1721,9 @@ export const CustomerExperience: React.FC<{
                         >
                           {isCheckingOut
                             ? 'Confirming with Kitchen...'
-                            : 'Proceed to Checkout'}
+                            : paymentMethod === 'COD'
+                            ? `Place COD Order (₹${cartTotal.toFixed(0)})`
+                            : `Pay ₹${cartTotal.toFixed(0)} & Place Order`}
                         </GlassButton>
                       </GlassCard>
                     </div>

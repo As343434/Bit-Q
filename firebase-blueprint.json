@@ -504,6 +504,21 @@
         "total": {
           "type": "number"
         },
+        "payment_method": {
+          "type": "string",
+          "enum": ["UPI", "CARD", "NET_BANKING", "WALLET", "COD"],
+          "description": "Selected customer payment method"
+        },
+        "payment_status": {
+          "type": "string",
+          "enum": ["PAID", "PENDING_COD"],
+          "description": "Whether payment is completed or pending cash on delivery"
+        },
+        "payment_detail": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Masked payment instrument label (e.g. Google Pay, Visa 4242, Cash on Delivery)"
+        },
         "status": {
           "type": "string",
           "enum": [

@@ -45,6 +45,8 @@ import {
   GeoLocationData,
   StoreRating,
   OrderChatMessage,
+  PaymentMethod,
+  PaymentStatus,
 } from './types';
 import { buildDefaultRestaurantMenu } from './seedData';
 import {
@@ -444,6 +446,9 @@ export default function App() {
     couponCode?: string;
     taxes: number;
     total: number;
+    paymentMethod: PaymentMethod;
+    paymentStatus: PaymentStatus;
+    paymentDetail: string;
   }): Promise<Order | null> => {
     if (!firebaseUser || !userProfile) return null;
     const orderId = `ord-${Date.now()}-${Math.random()
@@ -499,6 +504,9 @@ export default function App() {
       coupon_code: orderData.couponCode || '',
       taxes: orderData.taxes,
       total: orderData.total,
+      payment_method: orderData.paymentMethod,
+      payment_status: orderData.paymentStatus,
+      payment_detail: orderData.paymentDetail.slice(0, 80),
       status: 'ORDER_PLACED',
       estimated_arrival: orderData.restaurant.delivery_time || '25–30 min',
       distance_km: distKm,
@@ -1072,6 +1080,9 @@ export default function App() {
         delivery_partner_rating: userProfile.courier_rating || 5.0,
         ...(courierCoords
           ? { courier_lat: courierCoords[0], courier_lng: courierCoords[1] }
+          : {}),
+        ...(nextStatus === 'DELIVERED' && order.payment_status === 'PENDING_COD'
+          ? { payment_status: 'PAID' }
           : {}),
         ...stateTimestamps,
         estimated_arrival: etaByStage[nextStatus] || '14 min',
