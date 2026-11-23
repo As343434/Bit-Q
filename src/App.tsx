@@ -53,6 +53,7 @@ import {
   CERTIFIED_BACKUP_COURIERS,
   calculateDistanceKm,
 } from './services/locationApi';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { BitQLogo } from './components/GlassUI';
 import { LoginScreen, OnboardingScreen } from './components/AuthViews';
 import { CustomerExperience } from './components/CustomerViews';
@@ -1234,103 +1235,119 @@ export default function App() {
         <div className="animate-pulse">
           <BitQLogo size="lg" />
         </div>
+        <SpeedInsights />
       </div>
     );
   }
 
   if (!firebaseUser) {
     return (
-      <LoginScreen
-        onGoogleLogin={handleGoogleLogin}
-        isLoading={profileLoading}
-        error={authError}
-      />
+      <>
+        <LoginScreen
+          onGoogleLogin={handleGoogleLogin}
+          isLoading={profileLoading}
+          error={authError}
+        />
+        <SpeedInsights />
+      </>
     );
   }
 
   if (!userProfile) {
     return (
-      <OnboardingScreen
-        firebaseUser={firebaseUser}
-        initialRole={intendedRole}
-        onCompleteProfile={handleCompleteOnboarding}
-        onCancel={handleLogout}
-        isSubmitting={isSubmittingOnboarding}
-        error={authError}
-      />
+      <>
+        <OnboardingScreen
+          firebaseUser={firebaseUser}
+          initialRole={intendedRole}
+          onCompleteProfile={handleCompleteOnboarding}
+          onCancel={handleLogout}
+          isSubmitting={isSubmittingOnboarding}
+          error={authError}
+        />
+        <SpeedInsights />
+      </>
     );
   }
 
   if (userProfile.role === 'restaurant_partner') {
     return (
-      <RestaurantPartnerExperience
-        user={userProfile}
-        restaurant={myRestaurant}
-        categories={categories}
-        menuItems={effectiveMenuItems}
-        coupons={coupons}
-        orders={orders}
-        storeRatings={storeRatings}
-        orderMessages={orderMessages}
-        onSendOrderMessage={handleSendOrderMessage}
-        onCreateOrUpdateRestaurant={handleCreateOrUpdateRestaurant}
-        onCreateCategory={handleCreateCategory}
-        onUpdateCategory={handleUpdateCategory}
-        onDeleteCategory={handleDeleteCategory}
-        onAddMenuItem={handleAddMenuItem}
-        onUpdateMenuItem={handleUpdateMenuItem}
-        onDeleteMenuItem={handleDeleteMenuItem}
-        onCreateCoupon={handleCreateCoupon}
-        onToggleCoupon={handleToggleCoupon}
-        onDeleteCoupon={handleDeleteCoupon}
-        onUpdateOrderStatus={handleUpdateOrderStatus}
-        onLogout={handleLogout}
-      />
+      <>
+        <RestaurantPartnerExperience
+          user={userProfile}
+          restaurant={myRestaurant}
+          categories={categories}
+          menuItems={effectiveMenuItems}
+          coupons={coupons}
+          orders={orders}
+          storeRatings={storeRatings}
+          orderMessages={orderMessages}
+          onSendOrderMessage={handleSendOrderMessage}
+          onCreateOrUpdateRestaurant={handleCreateOrUpdateRestaurant}
+          onCreateCategory={handleCreateCategory}
+          onUpdateCategory={handleUpdateCategory}
+          onDeleteCategory={handleDeleteCategory}
+          onAddMenuItem={handleAddMenuItem}
+          onUpdateMenuItem={handleUpdateMenuItem}
+          onDeleteMenuItem={handleDeleteMenuItem}
+          onCreateCoupon={handleCreateCoupon}
+          onToggleCoupon={handleToggleCoupon}
+          onDeleteCoupon={handleDeleteCoupon}
+          onUpdateOrderStatus={handleUpdateOrderStatus}
+          onLogout={handleLogout}
+        />
+        <SpeedInsights />
+      </>
     );
   }
 
   if (userProfile.role === 'delivery_partner') {
     return (
-      <DeliveryPartnerExperience
-        user={userProfile}
-        orders={orders}
-        orderMessages={orderMessages}
-        onSendOrderMessage={handleSendOrderMessage}
-        onToggleOnline={(next) => handleUpdateUserProfile({ is_online: next })}
-        onUpdateRange={(km) =>
-          handleUpdateUserProfile({ delivery_range_km: km })
-        }
-        onAdvanceDeliveryState={handleCourierAdvanceOrder}
-        onUpdateCourierLocation={handleUpdateCourierLocation}
-        onLogout={handleLogout}
-      />
+      <>
+        <DeliveryPartnerExperience
+          user={userProfile}
+          orders={orders}
+          orderMessages={orderMessages}
+          onSendOrderMessage={handleSendOrderMessage}
+          onToggleOnline={(next) => handleUpdateUserProfile({ is_online: next })}
+          onUpdateRange={(km) =>
+            handleUpdateUserProfile({ delivery_range_km: km })
+          }
+          onAdvanceDeliveryState={handleCourierAdvanceOrder}
+          onUpdateCourierLocation={handleUpdateCourierLocation}
+          onLogout={handleLogout}
+        />
+        <SpeedInsights />
+      </>
     );
   }
 
   return (
-    <CustomerExperience
-      user={userProfile}
-      restaurants={restaurants}
-      categories={categories}
-      menuItems={effectiveMenuItems}
-      coupons={coupons}
-      orders={orders}
-      supportTickets={supportTickets}
-      storeRatings={storeRatings}
-      orderMessages={orderMessages}
-      onSubmitStoreRating={handleSubmitStoreRating}
-      onSendOrderMessage={handleSendOrderMessage}
-      onUpdateLocation={(loc, geo?: GeoLocationData) =>
-        handleUpdateUserProfile({
-          location: loc,
-          ...(geo ? { lat: geo.lat, lng: geo.lng, place_id: geo.placeId } : {}),
-        })
-      }
-      onUpdateProfile={handleUpdateUserProfile}
-      onPlaceOrder={handlePlaceOrder}
-      onSubmitSupportTicket={handleSubmitSupportTicket}
-      onUpdateCourierLocation={handleUpdateCourierLocation}
-      onLogout={handleLogout}
-    />
+    <>
+      <CustomerExperience
+        user={userProfile}
+        restaurants={restaurants}
+        categories={categories}
+        menuItems={effectiveMenuItems}
+        coupons={coupons}
+        orders={orders}
+        supportTickets={supportTickets}
+        storeRatings={storeRatings}
+        orderMessages={orderMessages}
+        onSubmitStoreRating={handleSubmitStoreRating}
+        onSendOrderMessage={handleSendOrderMessage}
+        onUpdateLocation={(loc, geo?: GeoLocationData) =>
+          handleUpdateUserProfile({
+            location: loc,
+            ...(geo ? { lat: geo.lat, lng: geo.lng, place_id: geo.placeId } : {}),
+          })
+        }
+        onUpdateProfile={handleUpdateUserProfile}
+        onPlaceOrder={handlePlaceOrder}
+        onSubmitSupportTicket={handleSubmitSupportTicket}
+        onUpdateCourierLocation={handleUpdateCourierLocation}
+        onLogout={handleLogout}
+      />
+      <SpeedInsights />
+    </>
   );
 }
