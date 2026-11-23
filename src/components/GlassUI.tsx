@@ -985,20 +985,20 @@ export const SearchBar: React.FC<{
 }> = ({ value, onChange, placeholder = 'What are you craving today?' }) => {
   return (
     <div className="relative w-full">
-      <Search className="w-4 h-4 text-stone-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+      <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full min-h-[48px] pl-11 pr-10 py-3 rounded-2xl glass-surface text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-emerald-900/20"
+        className="w-full min-h-[48px] pl-11 pr-10 py-3 rounded-2xl bg-white/90 border border-slate-200/90 text-sm text-slate-900 placeholder:text-slate-400 shadow-xs transition-all focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/15"
       />
       {value && (
         <button
           type="button"
           onClick={() => onChange('')}
           aria-label="Clear search"
-          className="min-w-[40px] min-h-[40px] absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-stone-400 hover:text-stone-700"
+          className="min-w-[40px] min-h-[40px] absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center justify-center text-slate-400 hover:text-slate-700"
         >
           <X className="w-4 h-4" />
         </button>
@@ -1102,51 +1102,58 @@ export const RestaurantCard: React.FC<{
       whileTap={{ scale: 0.99 }}
       transition={{ duration: 0.22 }}
       onClick={onClick}
-      className={`glass-surface rounded-3xl overflow-hidden cursor-pointer group flex flex-col ${
-        !restaurant.is_open ? 'opacity-65' : ''
+      className={`glass-surface rounded-3xl overflow-hidden cursor-pointer group flex flex-col transition-shadow hover:shadow-lg hover:shadow-rose-600/8 ${
+        !restaurant.is_open ? 'opacity-70' : ''
       }`}
     >
-      <div className="relative aspect-[4/3] w-full overflow-hidden bg-stone-100">
+      <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
         <ResilientImage
           src={restaurant.image_url}
           alt={restaurant.name}
-          className="w-full h-full transition-transform duration-300 group-hover:scale-[1.03]"
+          className="w-full h-full transition-transform duration-500 ease-out group-hover:scale-[1.04]"
         />
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/30 to-transparent p-4 pt-10 flex items-end justify-between text-white">
-          <span className="text-xs font-medium tracking-wide">
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/85 via-slate-950/35 to-transparent p-4 pt-12 flex items-end justify-between gap-2 text-white">
+          <span className="text-xs font-medium tracking-wide truncate">
             {restaurant.is_open
               ? restaurant.offer_text
-              : '🔴 Kitchen Currently Closed'}
+              : 'Kitchen Currently Closed'}
           </span>
-          <span className="text-xs font-mono tabular-nums">
+          <span className="text-xs font-mono tabular-nums shrink-0 font-semibold text-rose-200">
             {restaurant.delivery_time}
           </span>
         </div>
       </div>
 
-      <div className="p-5 flex-1 flex flex-col justify-between gap-3">
+      <div className="p-5 flex-1 flex flex-col justify-between gap-3.5">
         <div>
           <div className="flex items-baseline justify-between gap-2">
-            <h3 className="text-base font-semibold text-stone-900 truncate">
+            <h3 className="text-base font-bold text-slate-900 truncate group-hover:text-rose-600 transition-colors">
               {restaurant.name}
             </h3>
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600 shrink-0 tabular-nums">
+            <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-600 shrink-0 tabular-nums">
               <Star className="w-3.5 h-3.5 fill-rose-600 text-rose-600" />
               {restaurant.rating.toFixed(1)}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-stone-500 mt-1 truncate">
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1 truncate">
             <span className="truncate">{restaurant.cuisine}</span>
             <span aria-hidden="true">·</span>
             <span className="tabular-nums shrink-0">
               {restaurant.price_indicator}
             </span>
+            <span aria-hidden="true">·</span>
+            <span className="truncate">{restaurant.location}</span>
           </div>
         </div>
 
-        <div className="pt-3 border-t border-stone-200/50 flex items-center justify-between text-xs text-stone-500">
-          <span className="truncate">{restaurant.location}</span>
-          <span className="tabular-nums shrink-0">{restaurant.distance}</span>
+        <div className="pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs">
+          <span className="text-slate-500 tabular-nums font-mono">
+            {restaurant.distance}
+          </span>
+          <span className="inline-flex items-center gap-1 font-semibold text-blue-600 group-hover:text-rose-600 transition-colors">
+            <span>{restaurant.is_open ? 'Explore Menu' : 'View Menu'}</span>
+            <ChevronRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+          </span>
         </div>
       </div>
     </motion.article>
@@ -1203,33 +1210,35 @@ export const FoodCard: React.FC<{
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -2 }}
       transition={{ duration: 0.2 }}
-      className="glass-surface rounded-3xl p-4 flex gap-4 items-center justify-between"
+      className={`glass-surface rounded-3xl p-4 flex gap-4 items-center justify-between transition-all hover:shadow-md hover:shadow-rose-600/6 ${
+        quantity > 0 ? 'border-rose-300/80 ring-1 ring-rose-500/15' : ''
+      }`}
     >
       <div className="flex-1 min-w-0 pr-2">
-        <div className="flex items-center gap-2 text-xs text-stone-500 mb-1">
+        <div className="flex items-center gap-2 text-xs text-slate-500 mb-1">
           <span>{item.category}</span>
           {!item.is_available && (
             <>
               <span aria-hidden="true">·</span>
-              <span className="text-rose-700 font-medium">
+              <span className="text-rose-600 font-semibold">
                 Currently Sold Out
               </span>
             </>
           )}
         </div>
-        <h4 className="text-base font-semibold text-stone-900 leading-snug">
+        <h4 className="text-base font-semibold text-slate-900 leading-snug">
           {item.name}
         </h4>
-        <p className="text-sm font-mono font-medium text-stone-900 mt-1 tabular-nums">
+        <p className="text-sm font-mono font-bold text-slate-900 mt-1 tabular-nums">
           ₹{item.price.toFixed(0)}
         </p>
-        <p className="text-xs text-stone-600 mt-1.5 line-clamp-2 leading-relaxed">
+        <p className="text-xs text-slate-600 mt-1.5 line-clamp-2 leading-relaxed">
           {item.description}
         </p>
       </div>
 
       <div className="flex flex-col items-center gap-2 shrink-0">
-        <div className="w-24 h-24 rounded-2xl overflow-hidden bg-stone-100">
+        <div className="w-24 h-24 rounded-2xl overflow-hidden bg-slate-100">
           <ResilientImage
             src={item.image_url}
             alt={item.name}
@@ -1247,13 +1256,13 @@ export const FoodCard: React.FC<{
             <button
               type="button"
               onClick={onAdd}
-              className="min-h-[38px] px-4 py-1.5 rounded-xl bg-white border border-rose-200 text-xs font-semibold text-rose-600 hover:bg-gradient-to-r hover:from-rose-600 hover:to-blue-600 hover:text-white hover:border-transparent transition-all shadow-sm"
+              className="min-h-[38px] px-4 py-1.5 rounded-xl bg-white border border-rose-200 text-xs font-semibold text-rose-600 hover:bg-gradient-to-r hover:from-rose-600 hover:to-blue-600 hover:text-white hover:border-transparent transition-all shadow-xs whitespace-nowrap"
             >
               Add +
             </button>
           )
         ) : (
-          <span className="text-xs text-stone-400 font-medium py-1">
+          <span className="text-xs text-slate-400 font-medium py-1">
             Unavailable
           </span>
         )}
@@ -1381,70 +1390,80 @@ export const OrderCard: React.FC<{
   actionSlot?: React.ReactNode;
 }> = ({ order, onTrack, actionSlot }) => {
   const statusFormatted = order.status.replace(/_/g, ' ');
+  const isActive =
+    order.status !== 'DELIVERED' && order.status !== 'CANCELLED';
   return (
     <motion.div
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -3 }}
       transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
-      className="glass-surface rounded-3xl p-5 space-y-4"
+      className="glass-surface rounded-3xl p-5 space-y-4 transition-shadow hover:shadow-md hover:shadow-rose-600/6"
     >
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs text-stone-500">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
             <span className="font-mono tabular-nums">
               #{order.id.slice(-6).toUpperCase()}
             </span>
             <span aria-hidden="true">·</span>
-            <span>{statusFormatted}</span>
+            <span
+              className={`font-semibold ${
+                order.status === 'DELIVERED'
+                  ? 'text-emerald-700'
+                  : order.status === 'CANCELLED'
+                  ? 'text-rose-600'
+                  : 'text-blue-600'
+              }`}
+            >
+              {statusFormatted}
+            </span>
           </div>
-          <h4 className="text-base font-semibold text-stone-900 mt-1">
+          <h4 className="text-base font-bold text-slate-900 mt-1 truncate">
             {order.restaurant_name}
           </h4>
-          <p className="text-xs text-stone-500 mt-0.5">
+          <p className="text-xs text-slate-500 mt-0.5 truncate">
             {order.restaurant_location}
           </p>
         </div>
-        <span className="text-base font-mono font-semibold text-stone-900 tabular-nums">
+        <span className="text-base font-mono font-bold text-slate-900 tabular-nums shrink-0">
           ₹{order.total.toFixed(0)}
         </span>
       </div>
 
-      <p className="text-xs text-stone-600 leading-relaxed border-y border-stone-200/50 py-3">
+      <p className="text-xs text-slate-600 leading-relaxed border-y border-slate-200/60 py-3">
         {order.items_summary}
       </p>
 
       {order.payment_method && (
         <div className="flex items-center justify-between text-xs">
-          <span className="text-stone-500">
+          <span className="text-slate-500">
             Payment:{' '}
-            <strong className="text-stone-800">
+            <strong className="text-slate-800">
               {order.payment_detail || order.payment_method}
             </strong>
           </span>
           <span
             className={`font-semibold ${
               order.payment_status === 'PAID'
-                ? 'text-emerald-800'
+                ? 'text-emerald-700'
                 : 'text-amber-700'
             }`}
           >
-            {order.payment_status === 'PAID'
-              ? 'Paid ✓'
-              : 'Pay on Delivery'}
+            {order.payment_status === 'PAID' ? 'Paid ✓' : 'Pay on Delivery'}
           </span>
         </div>
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1.5 text-xs text-slate-600">
-          <Clock className="w-3.5 h-3.5 text-rose-600" />
+          <Clock className="w-3.5 h-3.5 text-rose-600 shrink-0" />
           <span>Est. {order.estimated_arrival}</span>
           {order.delivery_partner_name && (
             <>
               <span aria-hidden="true">·</span>
-              <span>
-                Courier: {order.delivery_partner_name} (
+              <span className="truncate max-w-[180px]">
+                {order.delivery_partner_name} (
                 {(order.delivery_partner_rating || 5.0).toFixed(1)} ★)
               </span>
             </>
@@ -1452,13 +1471,11 @@ export const OrderCard: React.FC<{
         </div>
 
         <div className="flex items-center gap-2">
-          {onTrack &&
-            order.status !== 'DELIVERED' &&
-            order.status !== 'CANCELLED' && (
-              <GlassButton variant="secondary" onClick={onTrack}>
-                Live Track
-              </GlassButton>
-            )}
+          {onTrack && isActive && (
+            <GlassButton variant="primary" onClick={onTrack}>
+              Live Track
+            </GlassButton>
+          )}
           {actionSlot}
         </div>
       </div>

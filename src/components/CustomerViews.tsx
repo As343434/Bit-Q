@@ -19,6 +19,10 @@ import {
   Wallet,
   Banknote,
   ShieldCheck,
+  Search,
+  X,
+  ChevronRight,
+  MessageSquareQuote,
 } from 'lucide-react';
 import {
   UserProfile,
@@ -133,7 +137,19 @@ export const CustomerExperience: React.FC<{
   // Discovery filters
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [kitchenQuickFilter, setKitchenQuickFilter] = useState<
+    'all' | 'open' | 'top_rated'
+  >('all');
   const [selectedMenuSection, setSelectedMenuSection] = useState<string>('All');
+  const [menuSearchQuery, setMenuSearchQuery] = useState('');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    window.setTimeout(() => {
+      setToastMessage((prev) => (prev === msg ? null : prev));
+    }, 2600);
+  };
 
   // Cart, Coupon & Payment state
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -176,31 +192,42 @@ export const CustomerExperience: React.FC<{
 
   // Filtered restaurants (Show open restaurants first, closed kitchens dimmed)
   const filteredRestaurants = useMemo(() => {
-    return restaurants.filter((r) => {
-      const matchesCategory =
-        selectedCategory === 'All' ||
-        r.cuisine.toLowerCase().includes(selectedCategory.toLowerCase()) ||
-        r.name.toLowerCase().includes(selectedCategory.toLowerCase());
+    return restaurants
+      .filter((r) => {
+        if (kitchenQuickFilter === 'open' && !r.is_open) return false;
+        if (kitchenQuickFilter === 'top_rated' && r.rating < 4.5) return false;
 
-      const q = searchQuery.trim().toLowerCase();
-      if (!q) return matchesCategory;
+        const matchesCategory =
+          selectedCategory === 'All' ||
+          r.cuisine.toLowerCase().includes(selectedCategory.toLowerCase()) ||
+          r.name.toLowerCase().includes(selectedCategory.toLowerCase());
 
-      const hasMatchingDish = menuItems.some(
-        (m) =>
-          m.restaurant_id === r.id &&
-          (m.name.toLowerCase().includes(q) ||
-            m.description.toLowerCase().includes(q))
-      );
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return matchesCategory;
 
-      const matchesSearch =
-        r.name.toLowerCase().includes(q) ||
-        r.cuisine.toLowerCase().includes(q) ||
-        r.location.toLowerCase().includes(q) ||
-        hasMatchingDish;
+        const hasMatchingDish = menuItems.some(
+          (m) =>
+            m.restaurant_id === r.id &&
+            (m.name.toLowerCase().includes(q) ||
+              m.description.toLowerCase().includes(q))
+        );
 
-      return matchesCategory && matchesSearch;
-    });
-  }, [restaurants, menuItems, selectedCategory, searchQuery]);
+        const matchesSearch =
+          r.name.toLowerCase().includes(q) ||
+          r.cuisine.toLowerCase().includes(q) ||
+          r.location.toLowerCase().includes(q) ||
+          hasMatchingDish;
+
+        return matchesCategory && matchesSearch;
+      })
+      .sort((a, b) => Number(b.is_open) - Number(a.is_open));
+  }, [
+    restaurants,
+    menuItems,
+    selectedCategory,
+    searchQuery,
+    kitchenQuickFilter,
+  ]);
 
   // Dynamic Restaurant Menu Sections (from custom RestaurantCategory + item categories)
   const restaurantMenuSections = useMemo(() => {
@@ -228,6 +255,8 @@ export const CustomerExperience: React.FC<{
 
   const handleAddToCart = (item: MenuItem, restaurant: Restaurant) => {
     if (!restaurant.is_open) return;
+    const isSwitching =
+      cart.length > 0 && cart[0].restaurant.id !== restaurant.id;
     setCart((prev) => {
       const existingDiffRestaurant =
         prev.length > 0 && prev[0].restaurant.id !== restaurant.id;
@@ -246,6 +275,13 @@ export const CustomerExperience: React.FC<{
       }
       return [...baseCart, { menuItem: item, restaurant, quantity: 1 }];
     });
+    if (isSwitching) {
+      setAppliedCoupon(null);
+      setCouponError(null);
+      showToast(`Started fresh bag from ${restaurant.name}`);
+    } else if (getItemQuantity(item.id) === 0) {
+      showToast(`Added ${item.name} to bag`);
+    }
   };
 
   const handleRemoveFromCart = (itemId: string) => {
@@ -513,10 +549,34 @@ export const CustomerExperience: React.FC<{
         dietary_preferences: editDietary.trim(),
         delivery_preferences: editDeliveryNote.trim(),
       });
+      showToast('Delivery & profile preferences saved');
     } finally {
       setIsSavingProfile(false);
     }
   };
+
+  const selectedRestaurantReviews = useMemo(() => {
+    if (!selectedRestaurant) return [];
+    return storeRatings
+      .filter((r) => r.restaurant_id === selectedRestaurant.id)
+      .slice(0, 4);
+  }, [selectedRestaurant, storeRatings]);
+
+  const filteredMenuDishes = useMemo(() => {
+    if (!selectedRestaurant) return [];
+    const q = menuSearchQuery.trim().toLowerCase();
+    return menuItems.filter((m) => {
+      if (m.restaurant_id !== selectedRestaurant.id) return false;
+      if (selectedMenuSection !== 'All' && m.category !== selectedMenuSection)
+        return false;
+      if (!q) return true;
+      return (
+        m.name.toLowerCase().includes(q) ||
+        m.description.toLowerCase().includes(q) ||
+        m.category.toLowerCase().includes(q)
+      );
+    });
+  }, [menuItems, selectedRestaurant, selectedMenuSection, menuSearchQuery]);
 
   return (
     <div className="min-h-screen pb-24 md:pb-16 relative">
@@ -533,6 +593,7 @@ export const CustomerExperience: React.FC<{
         activeTab={activeTab}
         onSelectTab={(tab) => {
           setSelectedRestaurant(null);
+          setMenuSearchQuery('');
           setTrackingOrder(null);
           setActiveTab(tab);
         }}
@@ -540,6 +601,20 @@ export const CustomerExperience: React.FC<{
         currentLocation={user.location}
         onSelectLocation={onUpdateLocation}
       />
+
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl glass-elevated border border-rose-500/25 shadow-lg flex items-center gap-2 text-xs font-semibold text-slate-900 whitespace-nowrap"
+          >
+            <CheckCircle2 className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 space-y-10">
         <AnimatePresence mode="wait">
@@ -557,12 +632,12 @@ export const CustomerExperience: React.FC<{
               <button
                 type="button"
                 onClick={() => setTrackingOrder(null)}
-                className="min-h-[44px] inline-flex items-center gap-2 text-sm font-semibold text-stone-700 hover:text-stone-900"
+                className="min-h-[44px] inline-flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-900"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Back to Orders</span>
               </button>
-              <span className="text-xs font-mono text-stone-500 tabular-nums">
+              <span className="text-xs font-mono text-slate-500 tabular-nums">
                 Order #{liveTrackedOrder.id.slice(-6).toUpperCase()}
               </span>
             </div>
@@ -606,36 +681,36 @@ export const CustomerExperience: React.FC<{
 
                 {/* Courier Details Card or Real-Time Matching Indicator */}
                 {liveTrackedOrder.delivery_partner_name ? (
-                  <GlassCard className="p-4 flex items-center justify-between border-emerald-900/15 bg-emerald-900/5">
+                  <GlassCard className="p-4 flex items-center justify-between border-blue-600/20 bg-gradient-to-r from-rose-600/5 to-blue-600/5">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-2xl bg-emerald-900 text-white flex items-center justify-center text-lg shadow-sm">
+                      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-rose-600 to-blue-600 text-white flex items-center justify-center text-lg shadow-sm">
                         🛵
                       </div>
                       <div>
-                        <p className="text-xs text-stone-500 font-medium">
+                        <p className="text-xs text-slate-500 font-medium">
                           Live Assigned Delivery Partner
                         </p>
-                        <h4 className="text-base font-bold text-stone-900 font-display">
+                        <h4 className="text-base font-bold text-slate-900 font-display">
                           {liveTrackedOrder.delivery_partner_name}
                         </h4>
                       </div>
                     </div>
                     <div className="text-right">
-                      <span className="inline-flex items-center gap-1 text-sm font-bold text-rose-600 font-mono">
+                      <span className="inline-flex items-center gap-1 text-sm font-bold text-rose-600 font-mono tabular-nums">
                         <Star className="w-4 h-4 fill-rose-600 text-rose-600" />
                         {(
                           liveTrackedOrder.delivery_partner_rating || 5.0
                         ).toFixed(1)}
                       </span>
-                      <p className="text-xs font-semibold text-emerald-900 font-mono">
+                      <p className="text-xs font-semibold text-blue-700 font-mono tabular-nums">
                         ETA {liveTrackedOrder.estimated_arrival}
                       </p>
                     </div>
                   </GlassCard>
                 ) : (
-                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-xs text-amber-950">
+                  <div className="p-4 rounded-2xl bg-amber-50/90 border border-amber-200 flex items-center justify-between text-xs text-amber-950">
                     <div className="flex items-center gap-2.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping shrink-0" />
+                      <Clock className="w-4 h-4 text-amber-700 shrink-0" />
                       <div>
                         <strong className="block font-semibold">
                           Finding nearest Delivery Partner
@@ -653,10 +728,10 @@ export const CustomerExperience: React.FC<{
               <div className="lg:col-span-5 space-y-5">
                 <GlassCard className="p-6 space-y-5">
                   <div>
-                    <h3 className="text-lg font-semibold text-stone-900 font-display">
+                    <h3 className="text-lg font-semibold text-slate-900 font-display">
                       Your Order Status
                     </h3>
-                    <p className="text-xs text-stone-500 mt-0.5">
+                    <p className="text-xs text-slate-500 mt-0.5">
                       Real-time updates synced between restaurant, courier, and
                       your table
                     </p>
@@ -729,15 +804,15 @@ export const CustomerExperience: React.FC<{
                     </div>
                   )}
 
-                  <div className="pt-4 border-t border-stone-200/60 space-y-2 text-xs">
-                    <p className="font-semibold text-stone-800">
+                  <div className="pt-4 border-t border-slate-200/70 space-y-2 text-xs">
+                    <p className="font-semibold text-slate-800">
                       Order Items ({liveTrackedOrder.item_count})
                     </p>
-                    <p className="text-stone-600 leading-relaxed">
+                    <p className="text-slate-600 leading-relaxed">
                       {liveTrackedOrder.items_summary}
                     </p>
                     {liveTrackedOrder.payment_method && (
-                      <div className="flex items-center justify-between pt-2 text-stone-600">
+                      <div className="flex items-center justify-between pt-2 text-slate-600">
                         <span>
                           {liveTrackedOrder.payment_detail ||
                             liveTrackedOrder.payment_method}
@@ -745,7 +820,7 @@ export const CustomerExperience: React.FC<{
                         <span
                           className={`font-semibold ${
                             liveTrackedOrder.payment_status === 'PAID'
-                              ? 'text-emerald-800'
+                              ? 'text-blue-700'
                               : 'text-amber-700'
                           }`}
                         >
@@ -755,7 +830,7 @@ export const CustomerExperience: React.FC<{
                         </span>
                       </div>
                     )}
-                    <div className="flex items-center justify-between pt-2 font-mono text-sm font-semibold text-stone-900 tabular-nums">
+                    <div className="flex items-center justify-between pt-2 font-mono text-sm font-semibold text-slate-900 tabular-nums">
                       <span>
                         {liveTrackedOrder.payment_status === 'PENDING_COD'
                           ? 'Amount Due on Delivery'
@@ -798,21 +873,22 @@ export const CustomerExperience: React.FC<{
               onClick={() => {
                 setSelectedRestaurant(null);
                 setSelectedMenuSection('All');
+                setMenuSearchQuery('');
               }}
-              className="min-h-[44px] inline-flex items-center gap-2 text-sm font-semibold text-stone-700 hover:text-stone-900"
+              className="min-h-[44px] inline-flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-900"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Back to Discovery</span>
             </button>
 
-            <div className="relative rounded-3xl overflow-hidden aspect-[16/9] max-h-[340px] w-full bg-stone-200 shadow-sm">
+            <div className="relative rounded-3xl overflow-hidden aspect-[16/9] max-h-[340px] w-full bg-slate-200 shadow-sm">
               <ResilientImage
                 src={selectedRestaurant.image_url}
                 alt={selectedRestaurant.name}
                 className="w-full h-full"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-6 sm:p-8 flex flex-col justify-end text-white">
-                <div className="flex flex-wrap items-center gap-2 text-xs text-stone-200 mb-2">
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-900/40 to-transparent p-6 sm:p-8 flex flex-col justify-end text-white">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-200 mb-2">
                   <span>{selectedRestaurant.cuisine}</span>
                   <span aria-hidden="true">·</span>
                   <span>{selectedRestaurant.location}</span>
@@ -823,16 +899,16 @@ export const CustomerExperience: React.FC<{
                 </div>
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <div>
-                    <h1 className="text-2xl sm:text-4xl font-bold font-display">
+                    <h1 className="text-2xl sm:text-4xl font-bold font-display text-balance">
                       {selectedRestaurant.name}
                     </h1>
                     <p className="text-xs sm:text-sm text-rose-200 mt-1">
                       {selectedRestaurant.is_open
                         ? selectedRestaurant.offer_text
-                        : '🔴 Kitchen Closed — Currently Not Accepting New Orders'}
+                        : 'Kitchen Closed — Currently Not Accepting New Orders'}
                     </p>
                   </div>
-                  <div className="glass-elevated text-slate-900 px-4 py-2.5 rounded-2xl flex items-center gap-4 text-xs font-semibold tabular-nums">
+                  <div className="glass-elevated text-slate-900 px-4 py-2.5 rounded-2xl flex items-center gap-3.5 text-xs font-semibold tabular-nums">
                     <span className="inline-flex items-center gap-1 text-rose-600">
                       <Star className="w-4 h-4 fill-rose-600 text-rose-600" />
                       {selectedRestaurant.rating.toFixed(1)}
@@ -846,70 +922,131 @@ export const CustomerExperience: React.FC<{
               </div>
             </div>
 
-            {/* Dynamic Restaurant Categories Filter Bar */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2">
-              {restaurantMenuSections.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setSelectedMenuSection(cat)}
-                  className={`min-h-[42px] px-4 py-2 rounded-2xl text-xs font-semibold transition-all whitespace-nowrap ${
-                    selectedMenuSection === cat
-                      ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white shadow-sm'
-                      : 'glass-surface text-slate-700 hover:bg-white'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
+            {/* Dynamic Restaurant Categories + Dish Search Bar */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                {restaurantMenuSections.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setSelectedMenuSection(cat)}
+                    className={`min-h-[42px] px-4 py-2 rounded-2xl text-xs font-semibold transition-all whitespace-nowrap shrink-0 ${
+                      selectedMenuSection === cat
+                        ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white shadow-sm'
+                        : 'glass-surface text-slate-700 hover:bg-white'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              <div className="relative w-full md:w-64 shrink-0">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={menuSearchQuery}
+                  onChange={(e) => setMenuSearchQuery(e.target.value)}
+                  placeholder="Search dishes in menu..."
+                  className="w-full min-h-[42px] pl-10 pr-9 py-2 rounded-2xl glass-surface border border-slate-200/80 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-500/15"
+                />
+                {menuSearchQuery && (
+                  <button
+                    type="button"
+                    aria-label="Clear menu search"
+                    onClick={() => setMenuSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
-            {menuItems.filter(
-              (m) =>
-                m.restaurant_id === selectedRestaurant.id &&
-                (selectedMenuSection === 'All' ||
-                  m.category === selectedMenuSection)
-            ).length === 0 ? (
-              <GlassCard className="p-10 text-center space-y-2">
-                <p className="text-sm font-semibold text-stone-800">
-                  No dishes available in this category yet
+            {filteredMenuDishes.length === 0 ? (
+              <GlassCard className="p-10 text-center space-y-3">
+                <p className="text-sm font-semibold text-slate-800">
+                  {menuSearchQuery
+                    ? `No dishes matching "${menuSearchQuery}"`
+                    : 'No dishes available in this category yet'}
                 </p>
-                <p className="text-xs text-stone-500">
-                  The restaurant partner is currently updating their menu.
+                <p className="text-xs text-slate-500">
+                  {menuSearchQuery
+                    ? 'Try clearing your search or checking another section.'
+                    : 'The restaurant partner is currently updating their menu.'}
                 </p>
+                {(menuSearchQuery || selectedMenuSection !== 'All') && (
+                  <GlassButton
+                    variant="secondary"
+                    onClick={() => {
+                      setMenuSearchQuery('');
+                      setSelectedMenuSection('All');
+                    }}
+                  >
+                    Show All Dishes
+                  </GlassButton>
+                )}
               </GlassCard>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {menuItems
-                  .filter(
-                    (m) =>
-                      m.restaurant_id === selectedRestaurant.id &&
-                      (selectedMenuSection === 'All' ||
-                        m.category === selectedMenuSection)
-                  )
-                  .map((item) => (
-                    <FoodCard
-                      key={item.id}
-                      item={item}
-                      quantity={getItemQuantity(item.id)}
-                      onAdd={() => handleAddToCart(item, selectedRestaurant)}
-                      onRemove={() => handleRemoveFromCart(item.id)}
-                    />
+                {filteredMenuDishes.map((item) => (
+                  <FoodCard
+                    key={item.id}
+                    item={item}
+                    quantity={getItemQuantity(item.id)}
+                    onAdd={() => handleAddToCart(item, selectedRestaurant)}
+                    onRemove={() => handleRemoveFromCart(item.id)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Verified Guest Reviews for this Restaurant */}
+            {selectedRestaurantReviews.length > 0 && (
+              <div className="space-y-4 pt-2">
+                <div className="flex items-baseline justify-between">
+                  <h2 className="text-lg font-bold text-slate-900 font-display flex items-center gap-2">
+                    <MessageSquareQuote className="w-4 h-4 text-rose-600" />
+                    <span>Recent Diner Reviews</span>
+                  </h2>
+                  <span className="text-xs text-slate-500 tabular-nums">
+                    {selectedRestaurantReviews.length} verified ratings
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {selectedRestaurantReviews.map((rev) => (
+                    <GlassCard key={rev.id} className="p-4 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-slate-900">
+                          {rev.customer_name}
+                        </span>
+                        <span className="inline-flex items-center gap-1 font-mono font-bold text-rose-600 tabular-nums">
+                          <Star className="w-3.5 h-3.5 fill-rose-600 text-rose-600" />
+                          {rev.rating.toFixed(1)}
+                        </span>
+                      </div>
+                      {rev.comment && (
+                        <p className="text-xs text-slate-600 leading-relaxed">
+                          &ldquo;{rev.comment}&rdquo;
+                        </p>
+                      )}
+                    </GlassCard>
                   ))}
+                </div>
               </div>
             )}
 
             {totalCartItems > 0 && (
               <div className="sticky bottom-20 md:bottom-6 z-30 max-w-xl mx-auto">
-                <div className="glass-elevated rounded-3xl p-4 border border-emerald-900/20 flex items-center justify-between gap-4 shadow-xl">
+                <div className="glass-elevated rounded-3xl p-4 border border-rose-500/20 flex items-center justify-between gap-4 shadow-xl">
                   <div>
-                    <p className="text-xs font-medium text-stone-500">
+                    <p className="text-xs font-medium text-slate-500">
                       {totalCartItems} {totalCartItems === 1 ? 'item' : 'items'}{' '}
                       from {cart[0].restaurant.name}
                     </p>
-                    <p className="text-base font-mono font-bold text-stone-900 tabular-nums">
+                    <p className="text-base font-mono font-bold text-slate-900 tabular-nums">
                       ₹{cartSubtotal.toFixed(0)}{' '}
-                      <span className="text-xs font-sans font-normal text-stone-500">
+                      <span className="text-xs font-sans font-normal text-slate-500">
                         plus taxes
                       </span>
                     </p>
@@ -918,6 +1055,7 @@ export const CustomerExperience: React.FC<{
                     variant="primary"
                     onClick={() => {
                       setSelectedRestaurant(null);
+                      setMenuSearchQuery('');
                       setActiveTab('cart');
                     }}
                   >
@@ -943,6 +1081,44 @@ export const CustomerExperience: React.FC<{
                 transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
                 className="space-y-10"
               >
+                {/* Live Active Order Quick-Track Banner */}
+                {activeOrders.length > 0 && (
+                  <GlassCard
+                    elevated
+                    className="p-4 sm:p-5 border-blue-600/20 bg-gradient-to-r from-rose-600/5 via-white/90 to-blue-600/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-rose-600 to-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                        <MapPin className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-rose-600">
+                          Order in Progress · {activeOrders[0].status.replace(/_/g, ' ')}
+                        </p>
+                        <h3 className="text-sm sm:text-base font-bold text-slate-900 font-display truncate">
+                          {activeOrders[0].restaurant_name}
+                        </h3>
+                        <p className="text-xs text-slate-500 tabular-nums truncate">
+                          ETA {activeOrders[0].estimated_arrival} ·{' '}
+                          {activeOrders[0].delivery_partner_name
+                            ? `Partner: ${activeOrders[0].delivery_partner_name}`
+                            : 'Assigning nearby delivery partner'}
+                        </p>
+                      </div>
+                    </div>
+                    <GlassButton
+                      variant="primary"
+                      onClick={() => {
+                        setTrackingOrder(activeOrders[0]);
+                        setActiveTab('orders');
+                      }}
+                    >
+                      <span>Track Live</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </GlassButton>
+                  </GlassCard>
+                )}
+
                 <section className="relative overflow-hidden glass-elevated rounded-[32px] p-6 sm:p-8 space-y-6">
                   {/* Subtle Ambient Cherry-Blue Glow */}
                   <div
@@ -955,7 +1131,7 @@ export const CustomerExperience: React.FC<{
                       <p className="text-xs font-semibold tracking-wide text-rose-600">
                         Curated Local Dining
                       </p>
-                      <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 font-display leading-tight">
+                      <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 font-display leading-tight text-balance">
                         Good food, closer to you
                         {user.name ? `, ${user.name.split(' ')[0]}` : ''}.
                       </h1>
@@ -1005,17 +1181,17 @@ export const CustomerExperience: React.FC<{
                   <section className="space-y-4">
                     <div className="flex items-baseline justify-between">
                       <div>
-                        <h2 className="text-xl font-bold text-stone-900 font-display">
+                        <h2 className="text-xl font-bold text-slate-900 font-display">
                           Available Offers & Coupons
                         </h2>
-                        <p className="text-xs text-stone-500 mt-0.5">
+                        <p className="text-xs text-slate-500 mt-0.5">
                           Apply any active coupon code directly in your cart
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => setActiveTab('offers')}
-                        className="text-xs font-semibold text-rose-600 hover:underline"
+                        className="text-xs font-semibold text-rose-600 hover:underline whitespace-nowrap"
                       >
                         View all coupons →
                       </button>
@@ -1035,6 +1211,7 @@ export const CustomerExperience: React.FC<{
                           onApply={(code) => {
                             setCouponInput(code);
                             validateAndApplyCoupon(code);
+                            showToast(`Coupon ${code} ready for checkout`);
                           }}
                         />
                       ))}
@@ -1044,51 +1221,81 @@ export const CustomerExperience: React.FC<{
 
                 {/* Nearby Restaurants Grid */}
                 <section className="space-y-4">
-                  <div className="flex items-baseline justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <h2 className="text-2xl font-bold text-stone-900 font-display">
+                      <h2 className="text-2xl font-bold text-slate-900 font-display">
                         {selectedCategory === 'All'
                           ? 'Neighborhood Kitchens'
                           : `${selectedCategory} Kitchens`}
                       </h2>
-                      <p className="text-xs text-stone-500 mt-0.5">
+                      <p className="text-xs text-slate-500 mt-0.5 tabular-nums">
                         Showing {filteredRestaurants.length} curated partners
                         near {user.location}
                       </p>
                     </div>
-                    {(searchQuery || selectedCategory !== 'All') && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSearchQuery('');
-                          setSelectedCategory('All');
-                        }}
-                        className="text-xs font-semibold text-emerald-900 hover:underline"
-                      >
-                        Reset filters
-                      </button>
-                    )}
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {(
+                        [
+                          { id: 'all', label: 'All Kitchens' },
+                          { id: 'open', label: 'Open Now' },
+                          { id: 'top_rated', label: 'Top Rated 4.5+' },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setKitchenQuickFilter(opt.id)}
+                          className={`min-h-[38px] px-3.5 py-1.5 rounded-2xl text-xs font-semibold transition-all whitespace-nowrap shrink-0 ${
+                            kitchenQuickFilter === opt.id
+                              ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white shadow-sm'
+                              : 'glass-surface text-slate-700 hover:bg-white'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+
+                      {(searchQuery ||
+                        selectedCategory !== 'All' ||
+                        kitchenQuickFilter !== 'all') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchQuery('');
+                            setSelectedCategory('All');
+                            setKitchenQuickFilter('all');
+                          }}
+                          className="text-xs font-semibold text-rose-600 hover:underline px-2 whitespace-nowrap"
+                        >
+                          Reset filters
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {filteredRestaurants.length === 0 ? (
                     <GlassCard className="p-12 text-center space-y-3">
-                      <Compass className="w-8 h-8 text-stone-400 mx-auto" />
-                      <h3 className="text-lg font-semibold text-stone-900 font-display">
+                      <Compass className="w-8 h-8 text-slate-400 mx-auto" />
+                      <h3 className="text-lg font-semibold text-slate-900 font-display">
                         {restaurants.length === 0
                           ? 'No partner kitchens are live yet'
                           : 'No kitchens match your current filter'}
                       </h3>
-                      <p className="text-xs text-stone-500 max-w-md mx-auto">
+                      <p className="text-xs text-slate-500 max-w-md mx-auto">
                         {restaurants.length === 0
                           ? 'Partner kitchens and menus appear here in real time as restaurant partners onboard and open their kitchens.'
-                          : 'Try clearing your search query or switching to a different category.'}
+                          : 'Try clearing your search query or switching to a different filter.'}
                       </p>
-                      {(searchQuery || selectedCategory !== 'All') && (
+                      {(searchQuery ||
+                        selectedCategory !== 'All' ||
+                        kitchenQuickFilter !== 'all') && (
                         <GlassButton
                           variant="secondary"
                           onClick={() => {
                             setSearchQuery('');
                             setSelectedCategory('All');
+                            setKitchenQuickFilter('all');
                           }}
                         >
                           Explore All Kitchens
@@ -1101,7 +1308,11 @@ export const CustomerExperience: React.FC<{
                         <RestaurantCard
                           key={restaurant.id}
                           restaurant={restaurant}
-                          onClick={() => setSelectedRestaurant(restaurant)}
+                          onClick={() => {
+                            setMenuSearchQuery('');
+                            setSelectedMenuSection('All');
+                            setSelectedRestaurant(restaurant);
+                          }}
                         />
                       ))}
                     </div>
@@ -1114,21 +1325,21 @@ export const CustomerExperience: React.FC<{
             {activeTab === 'offers' && (
               <section className="max-w-4xl mx-auto space-y-6 animate-fadeIn">
                 <div>
-                  <h1 className="text-2xl font-bold text-stone-900 font-display">
+                  <h1 className="text-2xl font-bold text-slate-900 font-display">
                     Available Offers & Coupons
                   </h1>
-                  <p className="text-xs text-stone-500 mt-0.5">
+                  <p className="text-xs text-slate-500 mt-0.5">
                     Tap APPLY on any coupon to attach it to your dining bag
                   </p>
                 </div>
 
                 {coupons.filter((c) => c.active).length === 0 ? (
                   <GlassCard className="p-12 text-center space-y-3">
-                    <Tag className="w-8 h-8 text-stone-400 mx-auto" />
-                    <h3 className="text-lg font-semibold text-stone-900 font-display">
+                    <Tag className="w-8 h-8 text-slate-400 mx-auto" />
+                    <h3 className="text-lg font-semibold text-slate-900 font-display">
                       No active coupons right now
                     </h3>
-                    <p className="text-xs text-stone-500 max-w-sm mx-auto">
+                    <p className="text-xs text-slate-500 max-w-sm mx-auto">
                       Promotional offers created by restaurant partners will
                       appear here automatically.
                     </p>
@@ -1149,29 +1360,29 @@ export const CustomerExperience: React.FC<{
                             className="p-6 flex flex-col justify-between gap-4"
                           >
                             <div className="space-y-1.5">
-                              <div className="flex items-center justify-between text-xs text-stone-500">
-                                <span className="font-mono font-bold text-emerald-900 text-sm">
+                              <div className="flex items-center justify-between text-xs text-slate-500">
+                                <span className="font-mono font-bold text-rose-600 text-sm tracking-wide">
                                   {cpn.code}
                                 </span>
-                                <span>
+                                <span className="tabular-nums">
                                   {isExpired
                                     ? 'Expired'
                                     : `Valid until ${cpn.expiry_date}`}
                                 </span>
                               </div>
-                              <h3 className="text-xl font-bold text-stone-900 font-display">
+                              <h3 className="text-xl font-bold text-slate-900 font-display">
                                 {cpn.discount_type === 'PERCENTAGE'
                                   ? `${cpn.discount_value}% OFF (Maximum discount ₹${cpn.maximum_discount})`
                                   : `₹${cpn.discount_value} OFF`}
                               </h3>
-                              <p className="text-xs text-stone-600">
+                              <p className="text-xs text-slate-600">
                                 On orders above ₹{cpn.minimum_order_value} ·{' '}
                                 {cpn.description}
                               </p>
                             </div>
 
-                            <div className="pt-3 border-t border-stone-200/60 flex items-center justify-between">
-                              <span className="text-xs text-stone-500">
+                            <div className="pt-3 border-t border-slate-200/70 flex items-center justify-between">
+                              <span className="text-xs text-slate-500 tabular-nums">
                                 Min order ₹{cpn.minimum_order_value}
                               </span>
                               <GlassButton
@@ -1180,14 +1391,23 @@ export const CustomerExperience: React.FC<{
                                 onClick={() => {
                                   setCouponInput(cpn.code);
                                   validateAndApplyCoupon(cpn.code);
-                                  setActiveTab('cart');
+                                  if (cart.length > 0) {
+                                    setActiveTab('cart');
+                                  } else {
+                                    showToast(
+                                      `${cpn.code} saved — pick dishes to redeem`
+                                    );
+                                    setActiveTab('home');
+                                  }
                                 }}
                               >
                                 {isApplied
                                   ? '✓ Applied'
                                   : isExpired
                                   ? 'Expired'
-                                  : 'APPLY'}
+                                  : cart.length > 0
+                                  ? 'Apply to Bag'
+                                  : 'Apply & Browse'}
                               </GlassButton>
                             </div>
                           </GlassCard>
@@ -1201,23 +1421,39 @@ export const CustomerExperience: React.FC<{
             {/* CART VIEW WITH FULL COUPON VALIDATION & BILL BREAKDOWN */}
             {activeTab === 'cart' && (
               <section className="max-w-4xl mx-auto space-y-6 animate-fadeIn">
-                <div>
-                  <h1 className="text-2xl font-bold text-stone-900 font-display">
-                    Your Dining Bag
-                  </h1>
-                  <p className="text-xs text-stone-500 mt-0.5">
-                    Delivering to {user.location}
-                  </p>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h1 className="text-2xl font-bold text-slate-900 font-display">
+                      Your Dining Bag
+                    </h1>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Delivering to {user.location}
+                    </p>
+                  </div>
+                  {cart.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedRestaurant(cart[0].restaurant);
+                        setSelectedMenuSection('All');
+                        setMenuSearchQuery('');
+                      }}
+                      className="min-h-[40px] inline-flex items-center gap-1.5 text-xs font-semibold text-rose-600 hover:underline whitespace-nowrap"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Add more dishes from {cart[0].restaurant.name}</span>
+                    </button>
+                  )}
                 </div>
 
                 {cart.length === 0 ? (
                   <GlassCard className="p-12 text-center space-y-4">
-                    <ShoppingBag className="w-9 h-9 text-stone-400 mx-auto" />
+                    <ShoppingBag className="w-9 h-9 text-slate-400 mx-auto" />
                     <div className="space-y-1">
-                      <h3 className="text-lg font-semibold text-stone-900 font-display">
+                      <h3 className="text-lg font-semibold text-slate-900 font-display">
                         Your bag is currently empty
                       </h3>
-                      <p className="text-xs text-stone-500 max-w-sm mx-auto">
+                      <p className="text-xs text-slate-500 max-w-sm mx-auto">
                         Explore wood-fired pizzas, wagyu smash burgers, and
                         royal saffron biryanis from local kitchens.
                       </p>
@@ -1233,12 +1469,12 @@ export const CustomerExperience: React.FC<{
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                     <div className="lg:col-span-7 space-y-4">
                       <GlassCard className="p-5 space-y-4">
-                        <div className="flex items-center justify-between pb-3 border-b border-stone-200/60">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-200/70">
                           <div>
-                            <p className="text-xs text-stone-500">
+                            <p className="text-xs text-slate-500">
                               Preparing at
                             </p>
-                            <h3 className="text-base font-semibold text-stone-900">
+                            <h3 className="text-base font-semibold text-slate-900">
                               {cart[0].restaurant.name}
                             </h3>
                           </div>
@@ -1249,24 +1485,24 @@ export const CustomerExperience: React.FC<{
                               setAppliedCoupon(null);
                               setCouponError(null);
                             }}
-                            className="inline-flex items-center gap-1 text-xs font-medium text-rose-700 hover:text-rose-900"
+                            className="inline-flex items-center gap-1 text-xs font-medium text-rose-600 hover:text-rose-800"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>Clear</span>
                           </button>
                         </div>
 
-                        <div className="divide-y divide-stone-200/50">
+                        <div className="divide-y divide-slate-200/60">
                           {cart.map((entry) => (
                             <div
                               key={entry.menuItem.id}
                               className="py-3.5 flex items-center justify-between gap-4"
                             >
                               <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-stone-900 truncate">
+                                <p className="text-sm font-semibold text-slate-900 truncate">
                                   {entry.menuItem.name}
                                 </p>
-                                <p className="text-xs font-mono text-stone-500 tabular-nums mt-0.5">
+                                <p className="text-xs font-mono text-slate-500 tabular-nums mt-0.5">
                                   ₹{entry.menuItem.price.toFixed(0)} each
                                 </p>
                               </div>
@@ -1282,7 +1518,7 @@ export const CustomerExperience: React.FC<{
                                   handleRemoveFromCart(entry.menuItem.id)
                                 }
                               />
-                              <span className="text-sm font-mono font-semibold text-stone-900 tabular-nums w-16 text-right">
+                              <span className="text-sm font-mono font-semibold text-slate-900 tabular-nums w-16 text-right">
                                 ₹
                                 {(
                                   entry.menuItem.price * entry.quantity
@@ -1326,6 +1562,24 @@ export const CustomerExperience: React.FC<{
                             APPLY
                           </GlassButton>
                         </div>
+
+                        {!appliedCoupon && activeValidCoupons.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
+                            <span className="text-[11px] font-medium text-slate-500">
+                              Quick apply:
+                            </span>
+                            {activeValidCoupons.slice(0, 3).map((cpn) => (
+                              <button
+                                key={cpn.id}
+                                type="button"
+                                onClick={() => validateAndApplyCoupon(cpn.code)}
+                                className="px-2.5 py-1 rounded-xl bg-rose-50 border border-rose-200/80 text-[11px] font-mono font-semibold text-rose-700 hover:bg-rose-100 transition-colors whitespace-nowrap"
+                              >
+                                {cpn.code}
+                              </button>
+                            ))}
+                          </div>
+                        )}
 
                         {couponError && (
                           <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 flex items-center gap-2 text-xs text-rose-900">
@@ -1658,19 +1912,24 @@ export const CustomerExperience: React.FC<{
                     </div>
 
                     {/* Bill Breakdown & Checkout CTA */}
-                    <div className="lg:col-span-5 space-y-4">
+                    <div className="lg:col-span-5 lg:sticky lg:top-24 space-y-4">
                       <GlassCard elevated className="p-6 space-y-4">
-                        <h3 className="text-base font-semibold text-stone-900 font-display">
-                          Bill Summary
-                        </h3>
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-base font-semibold text-slate-900 font-display">
+                            Bill Summary
+                          </h3>
+                          <span className="text-[11px] font-medium text-slate-500 truncate max-w-[160px]">
+                            {user.location}
+                          </span>
+                        </div>
 
-                        <div className="space-y-2.5 text-xs text-stone-600">
+                        <div className="space-y-2.5 text-xs text-slate-600">
                           <div className="flex justify-between font-mono tabular-nums">
                             <span className="font-sans">Subtotal</span>
                             <span>₹{cartSubtotal.toFixed(0)}</span>
                           </div>
                           {cartDiscount > 0 && (
-                            <div className="flex justify-between font-mono tabular-nums text-emerald-800 font-semibold">
+                            <div className="flex justify-between font-mono tabular-nums text-rose-600 font-semibold">
                               <span className="font-sans">
                                 Discount ({appliedCoupon?.code})
                               </span>
@@ -1687,11 +1946,11 @@ export const CustomerExperience: React.FC<{
                           </div>
                         </div>
 
-                        <div className="pt-3 border-t border-stone-200/70 flex items-baseline justify-between">
-                          <span className="text-sm font-semibold text-stone-900">
+                        <div className="pt-3 border-t border-slate-200/70 flex items-baseline justify-between">
+                          <span className="text-sm font-semibold text-slate-900">
                             {paymentMethod === 'COD' ? 'Pay on Delivery' : 'To Pay'}
                           </span>
-                          <span className="text-xl font-mono font-bold text-stone-900 tabular-nums">
+                          <span className="text-xl font-mono font-bold text-slate-900 tabular-nums">
                             ₹{cartTotal.toFixed(0)}
                           </span>
                         </div>
@@ -1737,10 +1996,10 @@ export const CustomerExperience: React.FC<{
               <section className="max-w-4xl mx-auto space-y-8 animate-fadeIn">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
-                    <h1 className="text-2xl font-bold text-stone-900 font-display">
+                    <h1 className="text-2xl font-bold text-slate-900 font-display">
                       Your Orders & Live Timeline
                     </h1>
-                    <p className="text-xs text-stone-500 mt-0.5">
+                    <p className="text-xs text-slate-500 mt-0.5">
                       Track active kitchen preparation or revisit past meals
                     </p>
                   </div>
@@ -1754,13 +2013,13 @@ export const CustomerExperience: React.FC<{
                 </div>
 
                 <div className="space-y-4">
-                  <h2 className="text-sm font-semibold text-stone-700">
+                  <h2 className="text-sm font-semibold text-slate-700 tabular-nums">
                     Active Orders ({activeOrders.length})
                   </h2>
                   {activeOrders.length === 0 ? (
                     <GlassCard className="p-8 text-center space-y-3">
-                      <Clock className="w-6 h-6 text-stone-400 mx-auto" />
-                      <p className="text-sm font-medium text-stone-700">
+                      <Clock className="w-6 h-6 text-slate-400 mx-auto" />
+                      <p className="text-sm font-medium text-slate-700">
                         No active orders right now
                       </p>
                       <GlassButton
@@ -1785,12 +2044,12 @@ export const CustomerExperience: React.FC<{
                 </div>
 
                 <div className="space-y-4">
-                  <h2 className="text-sm font-semibold text-stone-700">
+                  <h2 className="text-sm font-semibold text-slate-700 tabular-nums">
                     Past Orders ({pastOrders.length})
                   </h2>
                   {pastOrders.length === 0 ? (
                     <GlassCard className="p-8 text-center">
-                      <p className="text-xs text-stone-500">
+                      <p className="text-xs text-slate-500">
                         Your completed order receipts will be archived here.
                       </p>
                     </GlassCard>
@@ -1820,20 +2079,23 @@ export const CustomerExperience: React.FC<{
             {activeTab === 'help' && (
               <section className="max-w-4xl mx-auto space-y-8 animate-fadeIn">
                 <div>
-                  <h1 className="text-2xl font-bold text-stone-900 font-display">
+                  <h1 className="text-2xl font-bold text-slate-900 font-display">
                     Help & Concierge Support
                   </h1>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Need help with an order, refund, or delivery partner? Reach us directly.
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                   <GlassCard className="lg:col-span-7 p-6 space-y-5">
-                    <h2 className="text-base font-semibold text-stone-900 font-display">
+                    <h2 className="text-base font-semibold text-slate-900 font-display">
                       Submit a Support Request
                     </h2>
 
                     {ticketSuccess && (
-                      <div className="p-4 rounded-2xl bg-emerald-900/10 border border-emerald-900/20 flex items-center gap-2.5 text-xs font-medium text-emerald-950">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-800 shrink-0" />
+                      <div className="p-4 rounded-2xl bg-blue-50/90 border border-blue-200 flex items-center gap-2.5 text-xs font-medium text-blue-950">
+                        <CheckCircle2 className="w-4 h-4 text-blue-700 shrink-0" />
                         <span>
                           Your support ticket has been logged. Our concierge
                           team will respond shortly.
@@ -1843,7 +2105,7 @@ export const CustomerExperience: React.FC<{
 
                     <form onSubmit={handleSupportSubmit} className="space-y-4">
                       <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-stone-600">
+                        <label className="text-xs font-medium text-slate-600">
                           Topic Category
                         </label>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -1862,10 +2124,10 @@ export const CustomerExperience: React.FC<{
                               key={cat}
                               type="button"
                               onClick={() => setTicketCategory(cat)}
-                              className={`min-h-[40px] px-3 py-2 rounded-xl text-xs font-medium text-left transition-colors ${
+                              className={`min-h-[40px] px-3 py-2 rounded-xl text-xs font-medium text-left transition-all ${
                                 ticketCategory === cat
-                                  ? 'bg-emerald-900 text-white'
-                                  : 'bg-white/80 text-stone-700 border border-stone-200/80 hover:bg-white'
+                                  ? 'bg-gradient-to-r from-rose-600 to-blue-600 text-white shadow-sm'
+                                  : 'bg-white/80 text-slate-700 border border-slate-200/80 hover:bg-white'
                               }`}
                             >
                               {cat}
@@ -1892,7 +2154,7 @@ export const CustomerExperience: React.FC<{
                       />
 
                       <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-stone-600">
+                        <label className="text-xs font-medium text-slate-600">
                           Details
                         </label>
                         <textarea
@@ -1902,7 +2164,7 @@ export const CustomerExperience: React.FC<{
                           placeholder="Share any relevant details..."
                           maxLength={800}
                           required
-                          className="w-full p-4 rounded-2xl bg-white/85 border border-stone-200/90 text-sm text-stone-900 focus:outline-none focus:border-emerald-800"
+                          className="w-full p-4 rounded-2xl bg-white/85 border border-slate-200/90 text-sm text-slate-900 focus:outline-none focus:border-rose-600 focus:ring-2 focus:ring-rose-500/15"
                         />
                       </div>
 
@@ -1919,13 +2181,13 @@ export const CustomerExperience: React.FC<{
                   </GlassCard>
 
                   <div className="lg:col-span-5 space-y-4">
-                    <h2 className="text-base font-semibold text-stone-900 font-display">
+                    <h2 className="text-base font-semibold text-slate-900 font-display tabular-nums">
                       Your Support Tickets ({supportTickets.length})
                     </h2>
                     {supportTickets.length === 0 ? (
                       <GlassCard className="p-8 text-center space-y-2">
-                        <LifeBuoy className="w-7 h-7 text-stone-400 mx-auto" />
-                        <p className="text-sm font-medium text-stone-700">
+                        <LifeBuoy className="w-7 h-7 text-slate-400 mx-auto" />
+                        <p className="text-sm font-medium text-slate-700">
                           No support tickets yet
                         </p>
                       </GlassCard>
@@ -1933,16 +2195,16 @@ export const CustomerExperience: React.FC<{
                       <div className="space-y-3">
                         {supportTickets.map((t) => (
                           <GlassCard key={t.id} className="p-4 space-y-2">
-                            <div className="flex items-center justify-between text-xs text-stone-500">
+                            <div className="flex items-center justify-between text-xs text-slate-500">
                               <span>{t.category}</span>
-                              <span className="font-mono font-semibold text-emerald-900">
+                              <span className="font-mono font-semibold text-blue-700">
                                 {t.status}
                               </span>
                             </div>
-                            <h4 className="text-sm font-semibold text-stone-900">
+                            <h4 className="text-sm font-semibold text-slate-900">
                               {t.subject}
                             </h4>
-                            <p className="text-xs text-stone-600 leading-relaxed">
+                            <p className="text-xs text-slate-600 leading-relaxed">
                               {t.message}
                             </p>
                           </GlassCard>
@@ -1961,7 +2223,7 @@ export const CustomerExperience: React.FC<{
 
                 <GlassCard className="p-6 space-y-5">
                   <div className="flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-stone-900 font-display">
+                    <h2 className="text-lg font-semibold text-slate-900 font-display">
                       Personal & Delivery Preferences
                     </h2>
                   </div>
@@ -1984,7 +2246,7 @@ export const CustomerExperience: React.FC<{
                       verifiedBadge
                     />
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-stone-600">
+                      <label className="text-xs font-medium text-slate-600">
                         Default Delivery Neighborhood
                       </label>
                       <LocationSelector
